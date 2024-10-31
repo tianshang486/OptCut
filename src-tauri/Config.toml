@@ -1,0 +1,9 @@
+# config.toml
+[database]
+server = "192.168.1.1"
+ports = [ 8001, 8001, 8002 ]
+connection_max = 5000
+
+[server]
+port = 8080
+ip = "10.0.0.1"

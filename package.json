@@ -1,5 +1,5 @@
 {
-  "name": "tauri_demo",
+  "name": "tauridemo",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -8,10 +8,12 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "tauri:build": "tauri build",
     "tauri:dev": "tauri dev"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2.0.1",
     "@tauri-apps/plugin-shell": "^2",
     "vue": "^3.3.4"
   },

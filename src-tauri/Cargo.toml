@@ -1,13 +1,9 @@
 [package]
-name = "tauri_demo"
+name = "tauriDemo"
 version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
-[package.metadata]
-
-custom_parameters = { num_cpus = 2 }
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
@@ -25,6 +21,8 @@ tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-
-
+toml = "0.8.19"
+tauri-plugin-dialog = "2"
+dirs = "5.0.1"
+xcap="0.0.14"
+lazy_static = "1.5.0"
