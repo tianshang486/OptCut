@@ -24,6 +24,22 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![greet, capture_screen])
+        .on_window_event(|app, event| {
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    // 阻止默认的关闭行为
+                    api.prevent_close(); // 先阻止默认关闭行为
+
+                    // 获取主窗口并关闭它
+                    if let Some(window) = app.get_window("main") {
+                        window.close().unwrap(); // 这里可以安全地调用close
+                    }
+                    // 退出程序
+                    std::process::exit(0);
+                }
+                _ => {}
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -70,6 +86,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 use std::time::Instant;
+use tauri::Manager;
 use xcap::Monitor;
 
 fn normalized(filename: &str) -> String {

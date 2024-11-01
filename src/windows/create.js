@@ -9,21 +9,25 @@ const appWindow = getCurrentWindow()
 export const windowConfig = {
     label: 'create-win',            // 窗口唯一label
     title: 'create-win',              // 窗口标题
-    url: ' http://localhost:1420/',                // 路由地址url
-    width: 1000,            // 窗口宽度
-    height: 640,            // 窗口高度
+    url: './test.html',                // 路由地址url
+    // url: 'http://www.baidu.com',                // 路由地址url
+    width: 1920,            // 窗口宽度
+    height: 1080,            // 窗口高度
     minWidth: 300,         // 窗口最小宽度
     minHeight: 200,        // 窗口最小高度,        // 窗口最小高度
-    x: null,                // 窗口相对于屏幕左侧坐标
-    y: null,                // 窗口相对于屏幕顶端坐标
-    center: true,           // 窗口居中显示
-    resizable: true,        // 是否支持缩放
-    maximized: false,       // 最大化窗口
+    x: 0,                // 窗口相对于屏幕左侧坐标
+    y: 0,                // 窗口相对于屏幕顶端坐标
+    center: false,           // 窗口居中显示
+    resizable: false,        // 是否支持缩放
+    // maximized: true,       // 最大化窗口
     decorations: false,     // 窗口是否装饰边框及导航条
-    alwaysOnTop: false,     // 置顶窗口
-    dragDropEnabled: false, // 禁止系统拖放
-    visible: true,         // 隐藏窗口
-
+    alwaysOnTop: true,     // 置顶窗口
+    dragDropEnabled: true, // 禁止系统拖放
+    visible: false,         // 隐藏窗口
+    transparent: true,    // 窗口背景是否透明
+    fullscreen: true,    // 全屏窗口
+    // skipTaskbar: true,   // 任务栏中不显示窗口
+    titleBarStyle: "hidden", // 隐藏标题栏
 }
 
 export class Windows {
@@ -48,27 +52,25 @@ export class Windows {
         const win = new WebviewWindow(args.label, args)
 
         // 窗口创建完毕/失败
-        win.once('tauri://created', async() => {
+        win.once('tauri://created', async () => {
             console.log('tauri://created')
             // 是否主窗口
-            if(args.label.indexOf('main') > -1) {
+            if (args.label.indexOf('main') > -1) {
                 console.log('is-main-win')
                 this.mainWin = win
             }
 
             // 是否最大化
-            if(args.maximized && args.resizable) {
+            if (args.maximized && args.resizable) {
                 console.log('is-maximized')
                 await win.maximize()
             }
+            win.show()
         })
 
-        win.once('tauri://error', async(error) => {
+        await win.once('tauri://error', async (error) => {
             console.log('window create error!', error)
         })
-        //
-        // await appWindow.show()
-
     }
 
     // 获取窗口
@@ -94,7 +96,7 @@ export class Windows {
 
         // 显示窗体
         await listen('win-show', async(event) => {
-            if(appWindow.label.indexOf('main') == -1) return
+            if(appWindow.label.indexOf('main') === -1) return
             await appWindow.show()
             await appWindow.unminimize()
             await appWindow.setFocus()

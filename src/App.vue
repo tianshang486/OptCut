@@ -27,9 +27,8 @@ async function openDialog() {
 }
 
 // @ts-ignore
-import {Windows, windowConfig} from './windows/create'
-import {window} from "@tauri-apps/api";
-
+import {Windows, } from './windows/create'
+import { WebviewWindow} from '@tauri-apps/api/webviewWindow'
 const imgurl = ref('');
 const isMoved = ref(false);
 const isDown = ref(false);
@@ -44,10 +43,20 @@ async function captureScreenshot() {
   const position = {x: 66, y: 66}
   // await invoke('capture_screen', {x: position.x, y: position.y});
 //   创建窗口
-  console.log(windowConfig)
   const window = new Windows();
   await window.createWin();
 
+//   const webview = new WebviewWindow('theUniqueLabel', {
+//     url: 'https://www.baidu.com',
+//   })
+// // since the webview window is created asynchronously,
+// // Tauri emits the `tauri://created` and `tauri://error` to notify you of the creation response
+//   webview.once('tauri://created', function () {
+//     // webview window successfully created
+//   })
+//   webview.once('tauri://error', function (e) {
+//     // an error occurred during webview window creation
+//   })
 }
 
 
