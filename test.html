@@ -2,63 +2,60 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>截图框</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fullscreen Screenshot Effect</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: rgba(0, 0, 0, 0.5);
-            position: relative;
-            overflow: hidden; /* 禁止滚动 */
+        /* 遮罩层 */
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 9999;
         }
-        #screenshot-area {
+        /* 鼠标移动时的透明区域 */
+        #hover-area {
             position: absolute;
-            border: 2px dashed white; /* 矩形边框样式 */
-            pointer-events: none; /* 禁止接收鼠标事件 */
-            display: none; /* 初始隐藏 */
-            background-color: rgba(0, 0, 0, 0); /* 初始背景完全透明 */
+            background-color: transparent;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
 
-<div id="screenshot-area"></div>
+<div id="overlay"></div>
+<div id="hover-area"></div>
 
 <script>
-    const screenshotArea = document.getElementById('screenshot-area');
-    let isDrawing = false;
-    let startX, startY;
+    const overlay = document.getElementById('overlay');
+    const hoverArea = document.getElementById('hover-area');
 
-    // 监听鼠标按下事件
-    window.addEventListener('mousedown', (e) => {
-        isDrawing = true;
+    let startX, startY; // 按下时的坐标
+
+    // 绑定全局鼠标移动事件
+    window.addEventListener('mousemove', (e) => {
+        const { clientX, clientY } = e;
+        hoverArea.style.width = '100px';
+        hoverArea.style.height = '100px';
+        hoverArea.style.left = `${clientX - 50}px`;
+        hoverArea.style.top = `${clientY - 50}px`;
+    });
+
+    // 绑定鼠标按下事件
+    overlay.addEventListener('mousedown', (e) => {
         startX = e.clientX;
         startY = e.clientY;
-        screenshotArea.style.left = startX + 'px';
-        screenshotArea.style.top = startY + 'px';
-        screenshotArea.style.width = '0px';
-        screenshotArea.style.height = '0px';
-        screenshotArea.style.display = 'block'; // 显示矩形区域
+        console.log(`Mouse down at: (${startX}, ${startY})`);
     });
 
-    // 监听鼠标移动事件
-    window.addEventListener('mousemove', (e) => {
-        if (isDrawing) {
-            const width = e.clientX - startX;
-            const height = e.clientY - startY;
-            screenshotArea.style.width = Math.abs(width) + 'px';
-            screenshotArea.style.height = Math.abs(height) + 'px';
-            screenshotArea.style.left = (width < 0 ? e.clientX : startX) + 'px';
-            screenshotArea.style.top = (height < 0 ? e.clientY : startY) + 'px';
-        }
-    });
-
-    // 监听鼠标松开事件
-    window.addEventListener('mouseup', () => {
-        isDrawing = false;
-        // 保持矩形轮廓，设置透明的背景
-        screenshotArea.style.backgroundColor = 'rgba(0, 0, 0, 0)'; // 完全透明
-        // 这里可以添加其他逻辑，比如处理截屏等
+    // 绑定鼠标松开事件
+    overlay.addEventListener('mouseup', (e) => {
+        const endX = e.clientX;
+        const endY = e.clientY;
+        console.log(`Mouse up at: (${endX}, ${endY})`);
     });
 </script>
 

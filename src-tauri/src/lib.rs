@@ -1,50 +1,51 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use std::env;
 mod config;
+use std::env;
 use config::Config;
+use mouse_position::mouse_position::Mouse;
+use std::process::Command;
+use image::open;
+use serde_json::json;
+use xcap::{image, Monitor};
+use serde::{Deserialize, Serialize, Deserializer};
 
 #[tauri::command(rename_all = "snake_case")]
-fn greet(image_path: &str) -> String {
+fn greet(image_path: &str) {
     // 根据传入的 img_path 创建完整的命令
     // 给image_path增加双引号
     // let image_path = format!("\"{}\"", imagePaths);
     println!("image_path: {}", image_path);
-    main().expect("TODO: panic message");
+    main().expect("TODO: panic message")
     // 运行命令行命令
-    let output = ps_ocr(&image_path);
+    // let output = ps_ocr(&image_path);
     // 返回格式化的结果
-    format!("你好!: {}", output)
+    // format!("你好!: {}", output)
 }
-
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     println!("当前工作目录: {:?}", env::current_dir());
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![greet, capture_screen])
-        .on_window_event(|app, event| {
-            match event {
-                tauri::WindowEvent::CloseRequested { api, .. } => {
-                    // 阻止默认的关闭行为
-                    api.prevent_close(); // 先阻止默认关闭行为
-
-                    // 获取主窗口并关闭它
-                    if let Some(window) = app.get_window("main") {
-                        window.close().unwrap(); // 这里可以安全地调用close
-                    }
-                    // 退出程序
-                    std::process::exit(0);
-                }
-                _ => {}
-            }
-        })
+        .invoke_handler(tauri::generate_handler![capture_screen_one,capture_screen_fixed])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
-use std::process::Command;
+#[derive(Serialize, Deserialize)]
+struct Struct {
+    image_path: String,
+}
+
+impl Struct {
+    // 构造函数，用于初始化 image_path
+    fn new() -> Self {
+        let image_path = env::temp_dir().join(format!("{}.png", normalized("AGCut"))).to_string_lossy().to_string();
+        Self { image_path }
+    }
+}
+
 fn ps_ocr(image_path: &str) -> String {
     // 直接调用可执行文件，避免使用 cmd
     let output = Command::new("tools\\RapidOCR-json_v0.2.0\\RapidOCR-json.exe")
@@ -78,16 +79,13 @@ fn use_config(config: &Config) {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config_str = std::fs::read_to_string("config.toml")?;
-    let config: config::Config = toml::from_str(&config_str)?;
+    let config: Config = toml::from_str(&config_str)?;
 
     use_config(&config);
 
     Ok(())
 }
 
-use std::time::Instant;
-use tauri::Manager;
-use xcap::Monitor;
 
 fn normalized(filename: &str) -> String {
     filename
@@ -98,16 +96,68 @@ fn normalized(filename: &str) -> String {
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn capture_screen(x: u32, y: u32) {
-    let start = Instant::now();
-    let monitors = Monitor::all().unwrap();
-    println!("监视器数量: {}, 位置: ({}, {})" , monitors.len(), x, y);
-    for monitor in monitors {
-        let image = monitor.capture_image().unwrap();
-        image
-            .save(format!("target/monitor-{}.png", normalized(monitor.name())))
-            .unwrap();
-    }
+fn capture_screen_one() -> Result<String, String> {
+    let my_struct = Struct::new();
+    // 直接获取鼠标位置和对应屏幕，避免获取所有显示器
+    let position = Mouse::get_mouse_position();
+    let (x, y) = if let Mouse::Position { x, y } = position {
+        (x, y)
+    } else {
+        return Err("获取鼠标位置失败".to_string());
+    };
 
-    println!("运行耗时: {:?}", start.elapsed());
+    // 直接从坐标获取显示器
+    let screen = Monitor::from_point(x, y)
+        .map_err(|_| "无法获取显示器信息".to_string())?;
+    println!("{:?}", screen);
+    // 直接截图保存
+    let image_data = screen.capture_image()
+        .map_err(|_| "截图失败".to_string())?;
+
+    image_data.save(&my_struct.image_path)
+        .map_err(|_| "保存截图失败".to_string())?;
+    //    .map_err(|_| "打开截图失败".to_string())?;
+    // 构建返回数据
+    Ok(json!({
+        "path": my_struct.image_path.to_string(),
+        "x": x,
+        "y": y,
+        "window_x": screen.x(),
+        "window_y": screen.y(),
+        "width": screen.width(),
+        "height": screen.height()
+    }).to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+fn capture_screen_fixed(x: i32, y: i32, width: u32, height: u32) -> Result<String, String> {
+    let my_struct = Struct::new();
+    // 直接获取鼠标位置和对应屏幕，避免获取所有显示器
+    // 读取原始截图
+    let mut img = open(&my_struct.image_path)
+        .map_err(|_| "无法打开原始图片".to_string())?;
+    // 根据鼠标位置获取图片裁剪位置,注意鼠标位置存在负值,需要与屏幕尺寸相加
+    println!("{} {} 图片尺寸", img.width(), x);
+    let x_new: i32 = if x < 0 {
+        img.width() as i32 + x as i32
+    } else {
+        x
+    };
+    println!("图片尺寸: {}x{} x,y: {},{}", width, height, x_new, y);
+    // 裁剪图片
+    let cropped = img.crop(x_new as u32, y as u32, width, height);
+    // 保存裁剪后的图片,增加时间戳避免覆盖
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    // 保存裁剪后的图片,增加时间戳避免覆盖
+    let path = env::temp_dir().join(format!("AGCut_{}.png", timestamp));
+    println!("保存路径: {}", path.to_string_lossy());
+    cropped.save(&path)
+        .map_err(|_| "保存裁剪图片失败".to_string())?;
+    // 构建返回数据
+    Ok(json!({
+        "path": path.to_string_lossy().to_string(),
+    }).to_string())
 }

@@ -18,10 +18,17 @@
       }
     ],
     "security": {
-      "csp": null,
       "capabilities": [
         "default"
-      ]
+      ],
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPDATA/**",
+          "$TEMP/**"
+        ]
+      },
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost https: data:;"
     },
     "macOSPrivateApi": true
   },

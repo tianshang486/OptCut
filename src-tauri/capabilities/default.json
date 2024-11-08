@@ -3,7 +3,9 @@
   "identifier": "default",
   "description": "Capability for the main window",
   "windows": [
-    "main"
+    "main",
+    "screenshot",
+    "fixed"
   ],
   "permissions": [
     "core:default",
@@ -12,7 +14,11 @@
     "core:window:default",
     "core:window:allow-start-dragging",
     "core:webview:allow-create-webview-window",
-    "core:window:allow-show"
+    "core:window:allow-get-all-windows",
+    "core:window:allow-show",
+    "core:window:allow-close",
+    "fs:read-all",
+    "fs:allow-open",
+    "fs:write-all"
   ]
-
 }

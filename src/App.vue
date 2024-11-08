@@ -1,113 +1,37 @@
 <script setup lang="ts">
-import {ref} from "vue";
-import {convertFileSrc, invoke} from "@tauri-apps/api/core";
-import {open} from '@tauri-apps/plugin-dialog';
-
-const greetMsg = ref("");
-const image_path = ref("");
-const name = ref("");
-
-async function greet() {
-  // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-  greetMsg.value = await invoke("greet", {image_path: image_path.value});
-}
-
-
-// Open a dialog
-async function openDialog() {
-  const file: Array<string> | null = await open({
-    multiple: true,
-    directory: false,
-  });
-  console.log(file);
-  if (!file) return;
-  image_path.value = file.join(", ");
-  greetMsg.value = await invoke("greet", {image_path: image_path.value});
-  await invoke("capture_screen",);
-}
-
-// @ts-ignore
-import {Windows, } from './windows/create'
-import { WebviewWindow} from '@tauri-apps/api/webviewWindow'
-const imgurl = ref('');
-const isMoved = ref(false);
-const isDown = ref(false);
-const mouseDownX = ref(0);
-const mouseDownY = ref(0);
-const mouseMoveX = ref(0);
-const mouseMoveY = ref(0);
-
-const screenshotAreaStyle = ref({});
-
-async function captureScreenshot() {
-  const position = {x: 66, y: 66}
-  // await invoke('capture_screen', {x: position.x, y: position.y});
-//   创建窗口
-  const window = new Windows();
-  await window.createWin();
-
-//   const webview = new WebviewWindow('theUniqueLabel', {
-//     url: 'https://www.baidu.com',
-//   })
-// // since the webview window is created asynchronously,
-// // Tauri emits the `tauri://created` and `tauri://error` to notify you of the creation response
-//   webview.once('tauri://created', function () {
-//     // webview window successfully created
-//   })
-//   webview.once('tauri://error', function (e) {
-//     // an error occurred during webview window creation
-//   })
-}
 
 
 </script>
 
 <template>
-  <main class="container">
-    <h1>Welcome to Tauri + Vue</h1>
+  <router-view></router-view>
+  <!--  <main class="container">-->
+  <!--    <h1>Welcome to Tauri + Vue</h1>-->
 
-    <div class="row">
-      <a href="https://vitejs.dev" target="_blank">
-        <img src="/vite.svg" class="logo vite" alt="Vite logo"/>
-      </a>
-      <a href="https://tauri.app" target="_blank">
-        <img src="/tauri.svg" class="logo tauri" alt="Tauri logo"/>
-      </a>
-      <a href="https://vuejs.org/" target="_blank">
-        <img src="./assets/vue.svg" class="logo vue" alt="Vue logo"/>
-      </a>
-    </div>
-    <p>Click on the Tauri, Vite, and Vue logos to learn more.</p>
+  <!--    <div class="row">-->
+  <!--      <a href="https://vitejs.dev" target="_blank">-->
+  <!--        <img src="/vite.svg" class="logo vite" alt="Vite logo"/>-->
+  <!--      </a>-->
+  <!--      <a href="https://tauri.app" target="_blank">-->
+  <!--        <img src="/tauri.svg" class="logo tauri" alt="Tauri logo"/>-->
+  <!--      </a>-->
+  <!--      <a href="https://vuejs.org/" target="_blank">-->
+  <!--        <img src="./assets/vue.svg" class="logo vue" alt="Vue logo"/>-->
+  <!--      </a>-->
+  <!--    </div>-->
+  <!--    <p>Click on the Tauri, Vite, and Vue logos to learn more.</p>-->
 
-    <form class="row" @submit.prevent="greet">
-      <input id="greet-input" v-model="name" placeholder="Enter a name..."/>
-      <button type="submit">Greet</button>
-      <button type="button" @click="openDialog">Open Dialog</button>
-    </form>
-    <p>{{ greetMsg }}</p>
-  </main>
-  <button @click="captureScreenshot">Capture Screenshot</button>
-  <img v-if="imgurl" :src="imgurl" class="fixed top-0 left-0 w-full select-none" alt=""/>
-  <div
-      v-if="isMoved"
-      class="fixed bg-[#2080f020] border border-solid border-sky-500"
-      :style="screenshotAreaStyle"
-  />
-  <div
-      class="fixed top-0 left-0 bottom-0 right-0 cursor-crosshair select-none"
-  />
+  <!--    <form class="row" @submit.prevent="greet">-->
+  <!--      <input id="greet-input" v-model="name" placeholder="Enter a name..."/>-->
+  <!--      <button type="submit">Greet</button>-->
+
+  <!--    </form>-->
+  <!--    <p>{{ greetMsg }}</p>-->
+  <!--  </main>-->
+
 </template>
 
-<style scoped>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
 
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #249b73);
-}
-
-</style>
 <style>
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
@@ -221,4 +145,11 @@ button {
   }
 }
 
+/* 确保路由视图容器也是透明的 */
+.router-view {
+  background: transparent !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  flex: 1 !important; /* 添加flex属性以填充剩余空间 */
+}
 </style>
