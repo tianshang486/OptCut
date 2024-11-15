@@ -17,8 +17,13 @@
     "core:window:allow-get-all-windows",
     "core:window:allow-show",
     "core:window:allow-close",
+    "core:window:allow-set-size",
     "fs:read-all",
     "fs:allow-open",
-    "fs:write-all"
+    "fs:allow-write",
+    "fs:write-all",
+    "global-shortcut:allow-is-registered",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister"
   ]
 }

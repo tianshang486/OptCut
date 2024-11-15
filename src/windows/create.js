@@ -1,6 +1,6 @@
-import {getCurrentWindow} from '@tauri-apps/api/window'
-import {WebviewWindow, getAllWebviewWindows} from '@tauri-apps/api/webviewWindow'
+import {WebviewWindow, getAllWebviewWindows, getCurrentWebviewWindow} from '@tauri-apps/api/webviewWindow'
 import {emitTo} from '@tauri-apps/api/event'
+import {PhysicalSize} from "@tauri-apps/api/window";
 
 // 创建窗口参数配置
 export const windowConfig = {
@@ -9,20 +9,24 @@ export const windowConfig = {
     url: '/#/screenshot',                // 路由地址url
     width: 1920,            // 窗口宽度
     height: 1080,            // 窗口高度
-    minWidth: 2,         // 窗口最小宽度
-    minHeight: 2,        // 窗口最小高度,
     x: 0,                // 窗口相对于屏幕左侧坐标
     y: 0,                // 窗口相对于屏幕顶端坐标
-    // center: false,           // 窗口居中显示
+    center: false,           // 窗口居中显示
     resizable: false,        // 是否支持缩放
     maximized: true,       // 最大化窗口
-    decorations: false,     // 窗口是否装饰边框及导航条
+    decorations: true,     // 窗口是否装饰边框及导航条
     alwaysOnTop: true,     // 置顶窗口
     dragDropEnabled: true, // 禁止系统拖放
     visible: false,         // 隐藏窗口
     transparent: true,    // 窗口背景是否透明
     fullscreen: true,    // 全屏窗口
     skipTaskbar: true,   // 任务栏中不显示窗口
+    focus: false,         // 窗口是否获得焦点
+    contentProtected: false, // 窗口内容是否受保护
+    shadow: true,         // 窗口是否有阴影
+    theme: 'dark',         // 窗口主题
+    hiddenTitle: true,    // 窗口标题栏是否隐藏
+
 }
 
 export class Windows {
@@ -56,7 +60,7 @@ export class Windows {
             // 是否最大化
             if (args.maximized && args.resizable) {
                 console.log('is-maximized')
-                await win.maximize()
+                // await win.maximize()
             }
             await win.show()
 
@@ -90,6 +94,35 @@ export class Windows {
         return await getAllWebviewWindows()
     }
 
+    // 调整窗口大小
+    async resizeWin(label, size) {
+        const win = await this.getWin(label);
+        if (win) {
+            console.log(`尝试调整窗口: ${label} 大小`);
+            if (size.width && size.height && Number.isInteger(size.width) && Number.isInteger(size.height) && size.width > 0 && size.height > 0) {
+                await win.setSize(new PhysicalSize(size.width, size.height));
+                console.log(`窗口 ${label} 大小已调整`);
+            } else {
+                console.error('提供的尺寸无效，必须是非负整数');
+            }
+        } else {
+            console.log(`未找到窗口: ${label}`);
+        }
+    }
+
+    // 获取窗口大小
+    async getWinSize(label) {
+        const win = await this.getWin(label);
+        if (win) {
+            const size = await win.innerSize();
+            console.log(`窗口 ${label} 大小: ${size.width} x ${size.height}`);
+
+            return { width: size.width, height: size.height };
+        } else {
+            console.log(`未找到窗口: ${label}`);
+            return null;
+        }
+    }
 
     //     关闭创建的窗口
     async closeWin(label) {

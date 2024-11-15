@@ -3,6 +3,10 @@ import {Windows,} from '@/windows/create'
 import {onMounted, onUnmounted, ref} from "vue";
 import {PhysicalPosition} from '@tauri-apps/api/window';
 import {convertFileSrc, invoke} from "@tauri-apps/api/core";
+import {emitTo} from "@tauri-apps/api/event";
+
+
+
 
 // 从url中获取截图路径?path=' + result.path,
 const url: any = window.location.hash.slice(window.location.hash.indexOf('?') + 1);
@@ -109,6 +113,14 @@ interface ScreenshotResult {
   window_y: number;
 }
 
+// 使用url读取图片数据为ArrayBuffer
+
+async function fetchImageAsNumberArray(url: string) {
+  const response: any = await invoke('get_base64', {image_path: url.replace('http://asset.localhost/', '')})
+  console.log('base64', response)
+  await clipboard.writeText(response)
+}
+
 // 在 handleMouseUp 中重置
 const handleMouseUp = async (e: MouseEvent) => {
   e.preventDefault();
@@ -130,13 +142,12 @@ const handleMouseUp = async (e: MouseEvent) => {
     console.log('截图全屏');
     // 根据鼠标移动两个点的坐标获取图片的截图坐标
     const result: ScreenshotResult = JSON.parse(await invoke('capture_screen_fixed', {
-      x: mouseUpPos.value.x,
-      y: mouseUpPos.value.y,
+      x: x,
+      y: y,
       width: width,
       height: height,
     }));
     const imgUrl = convertFileSrc(result.path);
-    console.log('截图成功', imgUrl)
     const win_fixed = new Windows();
     const url = `/#/fixed?path=${imgUrl}`;
     console.log('窗口大小', width, height, '窗口位置', x, y, '图片路径', result.path)
@@ -147,18 +158,23 @@ const handleMouseUp = async (e: MouseEvent) => {
       url: url,
       width: width,
       height: height,
-      x: x,
-      y: y,
+      x: x - 8,
+      y: y - 32,
       resizable: true,
       fullscreen: false,
       maximized: false,
-      transparent: true,
+      transparent: false,
       center: false,
+      decorations: true,
     };
+    console.log('创建窗口', windowOptions)
     await win_fixed.createWin(windowOptions, result.path);
-    // await win.closeWin('screenshot');
+    await emitTo('fixed', 'OCRImage', result.path)
+    await win.closeWin('screenshot');
   } else {
     console.log('截图全屏');
+    const image: any = await fetchImageAsNumberArray(path);
+    console.log(image, '截图成功')
     // await win.closeWin('screenshot');
   }
 }
@@ -175,6 +191,7 @@ onUnmounted(() => {
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', handleMouseUp)
 })
+
 </script>
 <template>
   <div class="screenshot-container">
@@ -198,8 +215,6 @@ img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* 确保图片覆盖整个容器 */
-  object-position: center;
   /* 图片居中 */
   position: absolute;
   top: 0;
@@ -209,9 +224,6 @@ img {
 .screenshot-container {
   position: fixed;
   /* 改为 fixed */
-  width: 100vw;
-  /* 使用 vw 单位 */
-  height: 100vh;
   top: 0;
   left: 0;
   margin: 0;

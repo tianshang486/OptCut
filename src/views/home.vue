@@ -23,9 +23,7 @@ async function openDialog() {
 }
 
 const imgurl = ref('');
-const isMoved = ref(false);
 
-const screenshotAreaStyle = ref({});
 
 interface ScreenshotResult {
   path: string;
@@ -54,7 +52,7 @@ async function captureScreenshot() {
       width: result.width,
       height: result.height,
       x: result.window_x,
-      y: result.window_y - 1,
+      y: result.window_y,
     };
 
     await win.createWin(windowOptions, result.path);
@@ -68,14 +66,6 @@ async function captureScreenshot() {
   <button @click="captureScreenshot">Capture Screenshot</button>
   <button type="button" @click="openDialog">Open Dialog</button>
   <img v-if="imgurl" :src="imgurl" class="fixed top-0 left-0 w-full select-none" alt=""/>
-  <div
-      v-if="isMoved"
-      class="fixed bg-[#2080f020] border border-solid border-sky-500"
-      :style="screenshotAreaStyle"
-  />
-  <div
-      class="fixed top-0 left-0 bottom-0 right-0 cursor-crosshair select-none"
-  />
 </template>
 
 <style scoped>

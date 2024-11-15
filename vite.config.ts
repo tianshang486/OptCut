@@ -37,7 +37,7 @@ export default defineConfig(async (): Promise<any> => ({
     resolve: {
         alias: {
             "@": path.resolve(__dirname, "src"),
-            "@@": "/src-tauri"
+            "@@": path.resolve(__dirname, "src-tauri")
         }
     },
     // esbuild: {
