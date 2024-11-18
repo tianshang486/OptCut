@@ -17,7 +17,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2.0.3", features = [ "protocol-asset", "macos-private-api", "unstable"] }
+tauri = { version = "2.0.3", features = [ "protocol-asset", "macos-private-api", "unstable", "image-png", "image", "image-ico", "tauri-runtime-wry"] }
 tauri-plugin-shell = "2.0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -28,11 +28,9 @@ xcap="0.0.14"
 lazy_static = "1.5.0"
 mouse_position = "0.1.4"
 tauri-plugin-fs = "2"
-image = "0.25.4"
+image = "0.25.5"
 
-base64 = "0.22.1"
 tauri-plugin-clipboard-manager = "2.0.2"
-clipboard-rs = "0.2.1"
 
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]

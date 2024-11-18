@@ -1,19 +1,15 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod config;
-use base64::encode;
 use config::Config;
 use image::open;
 use mouse_position::mouse_position::Mouse;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
 use std::env;
-use std::fs::File;
-use std::io::{self, Read};
+use std::io::Read;
 use std::process::Command;
 use tauri::Manager;
-use tauri_plugin_clipboard_manager::ClipboardExt;
 use xcap::{image, Monitor};
-use clipboard_rs::{Clipboard, ClipboardContext, ContentFormat};
 
 // fn greet(image_path: &str) {
 //     // 根据传入的 img_path 创建完整的命令
@@ -142,7 +138,7 @@ fn capture_screen_one() -> Result<String, String> {
         "width": screen.width(),
         "height": screen.height()
     })
-    .to_string())
+        .to_string())
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -177,25 +173,16 @@ fn capture_screen_fixed(x: i32, y: i32, width: u32, height: u32) -> Result<Strin
     Ok(json!({
         "path": path.to_string_lossy().to_string(),
     })
-    .to_string())
+        .to_string())
 }
 
-// 转换图片base64编码的字符串
-// 转换图片base64编码的字符串
 #[tauri::command(rename_all = "snake_case")]
-fn get_base64(image_path: &str) -> Result<String, String> {
-    // 打开图片文件
-    let mut file = File::open(image_path).map_err(|e| e.to_string())?;
+fn get_base64(image_path: &str) -> Result<Vec<u8>, String> {
+    // 读取图片数据为字节数组返回给前端
+    let mut file = std::fs::File::open(image_path).map_err(|_| "打开图片失败".to_string())?;
     let mut buffer = Vec::new();
-    // 读取图片文件内容到buffer
-    file.read_to_end(&mut buffer).map_err(|e| e.to_string())?;
-    // 转换图片内容为base64编码的字符串
-    let base64_string: String = encode(&buffer);
-    let ctx = ClipboardContext::new().unwrap();
+    file.read_to_end(&mut buffer).map_err(|_| "读取图片失败".to_string())?;
 
-    let has_rtf = ctx.has(ContentFormat::Image);
-
-    println!("has_rtf={}", has_rtf);
-    // 返回base64字符串
-    Ok(base64_string)
+    Ok(buffer)
 }
+

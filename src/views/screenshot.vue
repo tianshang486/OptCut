@@ -4,8 +4,8 @@ import {onMounted, onUnmounted, ref} from "vue";
 import {PhysicalPosition} from '@tauri-apps/api/window';
 import {convertFileSrc, invoke} from "@tauri-apps/api/core";
 import {emitTo} from "@tauri-apps/api/event";
-
-
+import {writeImage, writeText} from "@tauri-apps/plugin-clipboard-manager";
+import {transformImage, Image} from "@tauri-apps/api/image";
 
 
 // 从url中获取截图路径?path=' + result.path,
@@ -113,13 +113,23 @@ interface ScreenshotResult {
   window_y: number;
 }
 
-// 使用url读取图片数据为ArrayBuffer
+// 使用url读取图片数据写入剪切板
 
-async function fetchImageAsNumberArray(url: string) {
-  const response: any = await invoke('get_base64', {image_path: url.replace('http://asset.localhost/', '')})
-  console.log('base64', response)
-  await clipboard.writeText(response)
-}
+// async function writeImageClipBoard(url: string) {
+//   // 将 Blob 转换为 Uint8Array
+//   // 使用 fromBytes 方法创建 Image 对象
+//   const image = await Image.fromPath(url.replace('http://asset.localhost/', ''));
+//
+//   // 将 Image 对象转换为 Rust 期望的格式
+//   const transformedImage: any = await transformImage(image);
+//
+//   // 写入剪切板
+//   await writeImage(transformedImage);
+//   await writeText(path)
+//   console.log('写入剪切板成功', 'success')
+//   return 'success';
+// }
+
 
 // 在 handleMouseUp 中重置
 const handleMouseUp = async (e: MouseEvent) => {
@@ -173,8 +183,27 @@ const handleMouseUp = async (e: MouseEvent) => {
     await win.closeWin('screenshot');
   } else {
     console.log('截图全屏');
-    const image: any = await fetchImageAsNumberArray(path);
-    console.log(image, '截图成功')
+    const result: any = await invoke('get_base64', {
+          image_path: path.replace('http://asset.localhost/', '')
+        }
+    )
+    console.log('截图成功', result)
+    // const transformedImage: any = transformImage(result);
+    console.log('图片转换成功', result)
+    // 写入剪切板
+    await writeImage(result);
+    let timeStamp = () => {
+      let date = new Date();
+      let year = date.getFullYear();
+      let month = date.getMonth() + 1;
+      let day = date.getDate();
+      let hour = date.getHours();
+      let minute = date.getMinutes();
+      let second = date.getSeconds();
+      return year + '-' + month + '-' + day + ' ' + hour + ':' + minute + ':' + second;
+    }
+    // await writeText('截图成功'+ timeStamp() + '，图片路径：' + path);
+
     // await win.closeWin('screenshot');
   }
 }
