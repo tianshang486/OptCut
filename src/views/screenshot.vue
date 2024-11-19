@@ -4,28 +4,39 @@ import {onMounted, onUnmounted, ref} from "vue";
 import {PhysicalPosition} from '@tauri-apps/api/window';
 import {convertFileSrc, invoke} from "@tauri-apps/api/core";
 import {emitTo} from "@tauri-apps/api/event";
-import {writeImage, writeText} from "@tauri-apps/plugin-clipboard-manager";
-import {transformImage, Image} from "@tauri-apps/api/image";
+import {writeImage} from "@tauri-apps/plugin-clipboard-manager";
+import {Image} from "@tauri-apps/api/image";
+// import {transformImage, Image} from "@tauri-apps/api/image";
 
 
 // 从url中获取截图路径?path=' + result.path,
 const url: any = window.location.hash.slice(window.location.hash.indexOf('?') + 1);
-const path: any = new URLSearchParams(url).get('path')
+const path: any = ref(new URLSearchParams(url).get('path'))
 console.log('截图路径', path)
 
 const win: any = new Windows()
+
+let isMouseDown = false;
+let lastRightClickTime = 0; // 记录上一次右键点击的时间
+
 const handleContextMenu = async (e: MouseEvent) => {
   e.preventDefault(); // 阻止默认的右键菜单
-  console.log('开始截图', e);
-  if (e.button === 2) {  // 2 表示右键点击
-    console.log('关闭截图窗口');
-    await win.closeWin('screenshot');
-    document.removeEventListener('contextmenu', handleContextMenu); // 移除事件监听
+  if (e.button === 2) { // 2 表示右键点击
+    const currentTime = Date.now(); // 获取当前时间
+    if (currentTime - lastRightClickTime < 400) { // 如果两次点击时间间隔小于400毫秒，则认为是双击
+      console.log('关闭截图窗口');
+      await win.closeWin('screenshot');
+      document.removeEventListener('contextmenu', handleContextMenu); // 移除事件监听
+    } else {
+      // 如果不是双击，记录这次点击的时间
+      lastRightClickTime = currentTime;
+    }
   }
 };
 
-document.addEventListener('contextmenu', handleContextMenu); // 监听右键点击事件
+document.addEventListener('contextmenu', handleContextMenu); // 监听右键点击
 
+document.addEventListener('contextmenu', handleContextMenu); // 监听右键点击事件
 // 添加必要的响应式变量
 const isDragging = ref(false)
 const startPos = ref({x: 0, y: 0})
@@ -47,6 +58,7 @@ const selectionStyle = ref({
 // 在 handleMouseDown 中初始化
 const handleMouseDown = (e: MouseEvent) => {
   e.preventDefault();
+  isMouseDown = true;
   isDragging.value = true;
   startPos.value = {x: e.clientX, y: e.clientY};
   currentPos.value = {x: e.clientX, y: e.clientY};
@@ -113,26 +125,50 @@ interface ScreenshotResult {
   window_y: number;
 }
 
-// 使用url读取图片数据写入剪切板
+async function readFileImage(path: string) {
+  return await Image.fromPath(path)
+}
 
-// async function writeImageClipBoard(url: string) {
-//   // 将 Blob 转换为 Uint8Array
-//   // 使用 fromBytes 方法创建 Image 对象
-//   const image = await Image.fromPath(url.replace('http://asset.localhost/', ''));
+// 复制图片到剪贴板
+const copyImage = async (path: string) => {
+  // await invoke("copied_to_clipboard", {image_path: path});
+  const img: any = await readFileImage(path);
+  await writeImage(img);
+};
+
+// const copyImage = async ( path: string ) => {
+//   // await invoke('copied_to_clipboard', {
+//   //   image_path: path.replace('http://asset.localhost/', '')
+//   // })
+//   const result: any = await invoke('get_clipboard_image', {
+//     image_path: path.replace('http://asset.localhost/', '')
+//   })
 //
-//   // 将 Image 对象转换为 Rust 期望的格式
-//   const transformedImage: any = await transformImage(image);
-//
-//   // 写入剪切板
-//   await writeImage(transformedImage);
-//   await writeText(path)
-//   console.log('写入剪切板成功', 'success')
-//   return 'success';
+//   await writeImage(result)
+//   console.log('复制成功')
 // }
 
+async function handleCopyImage() {
+  try {
+    await copyImage(path.value.replace('http://asset.localhost/', ''))
+    // const transformedImage: any = transformImage(result);
+    // // 写入剪切板
+    // await writeImage(transformedImage);
+    // js将url图片写到剪切板
+    // const imgUrl = convertFileSrc(transformedImage);
+
+    console.log('图片转换成功')
+    // await win.closeWin('screenshot');
+  } catch (e) {
+    console.error(e, '图片转换失败')
+    // await win.closeWin('screenshot');
+    return
+  }
+}
 
 // 在 handleMouseUp 中重置
 const handleMouseUp = async (e: MouseEvent) => {
+  if (!isMouseDown) return;
   e.preventDefault();
   isDragging.value = false;
   selectionStyle.value.display = 'none';
@@ -147,6 +183,8 @@ const handleMouseUp = async (e: MouseEvent) => {
   // 判断起始点和结束点,绝对值更小的为坐标轴的方向
   let x = Math.min(mouseUpPos.value.x, mouseDownPos.value.x);
   let y = Math.min(mouseUpPos.value.y, mouseDownPos.value.y);
+  isMouseDown = false;
+
   // 如果鼠标位置结束和开始相差2px以内视为截图全屏
   if (width > 2 || height > 2) {
     console.log('截图全屏');
@@ -182,29 +220,10 @@ const handleMouseUp = async (e: MouseEvent) => {
     await emitTo('fixed', 'OCRImage', result.path)
     await win.closeWin('screenshot');
   } else {
-    console.log('截图全屏');
-    const result: any = await invoke('get_base64', {
-          image_path: path.replace('http://asset.localhost/', '')
-        }
-    )
-    console.log('截图成功', result)
-    // const transformedImage: any = transformImage(result);
-    console.log('图片转换成功', result)
-    // 写入剪切板
-    await writeImage(result);
-    let timeStamp = () => {
-      let date = new Date();
-      let year = date.getFullYear();
-      let month = date.getMonth() + 1;
-      let day = date.getDate();
-      let hour = date.getHours();
-      let minute = date.getMinutes();
-      let second = date.getSeconds();
-      return year + '-' + month + '-' + day + ' ' + hour + ':' + minute + ':' + second;
-    }
-    // await writeText('截图成功'+ timeStamp() + '，图片路径：' + path);
 
-    // await win.closeWin('screenshot');
+    console.log('截图全屏');
+
+
   }
 }
 
@@ -224,7 +243,7 @@ onUnmounted(() => {
 </script>
 <template>
   <div class="screenshot-container">
-    <img :src="path" alt="Screenshot" class="screenshot-image">
+    <img :src="path" alt="Screenshot" class="screenshot-image" @click="handleCopyImage" />
     <div class="overlay" v-show="isDragging" :style="overlayStyle"></div>
     <div class="selection" :style="selectionStyle"></div>
   </div>

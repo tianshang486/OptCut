@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import {Windows,} from '@/windows/create'
+import {writeImage} from "@tauri-apps/plugin-clipboard-manager";
+import ContextMenu from '@imengyu/vue3-context-menu'
+import {onMounted, onUnmounted, Ref, ref, UnwrapRef} from "vue";
+import {invoke} from "@tauri-apps/api/core";
+import {Image} from "@tauri-apps/api/image";
 
 // 从url中获取截图路径?path=' + result.path,
 const url: any = window.location.hash.slice(window.location.hash.indexOf('?') + 1);
@@ -11,21 +16,29 @@ const image_path: any = ref(path.replace('http://asset.localhost/', ''))
 const is_ocr: Ref<UnwrapRef<boolean>, UnwrapRef<boolean> | boolean> = ref(false)
 
 
-
 const win = new Windows()
+
 // 调整窗口宽度
-// 调整窗口宽度
+
 function resize(width: number, height: number) {
-  win.resizeWin('fixed', { width: Math.floor(width), height: Math.floor(height) });
+  win.resizeWin('fixed', {width: Math.floor(width), height: Math.floor(height)});
 }
+
 // 获取窗口大小
 function getSize() {
   return win.getWinSize('fixed')
 }
 
-import ContextMenu from '@imengyu/vue3-context-menu'
-import {onMounted, onUnmounted, Ref, ref, UnwrapRef} from "vue";
-import {invoke} from "@tauri-apps/api/core";
+async function readFileImage(path: string) {
+  return await Image.fromPath(path)
+}
+
+// 复制图片到剪贴板
+const copyImage = async (path: string) => {
+  // await invoke("copied_to_clipboard", {image_path: path});
+  const img: any = await readFileImage(path);
+  await writeImage(img);
+};
 
 // 右键点击事件处理器
 const onContextMenu = async (e: MouseEvent) => {
@@ -45,11 +58,15 @@ const onContextMenu = async (e: MouseEvent) => {
         label: "A submenu",
         children: [
           {
-            label: "OCR", onClick: async () => {
+            label: "复制图片", onClick: async () => {
+              await copyImage(image_path.value);
+            }
+          },
+          {
+            label: "复制OCR结果", onClick: async () => {
               await ocr();
             }
           },
-          {label: "复制OCR结果"},
           {
             label: "关闭", onClick: async () => {
               await win.closeWin('fixed');
@@ -81,7 +98,7 @@ const ocr = async () => {
     alert('请先截图');
     return;
   } else {
-    const result = await invoke("ps_ocr", { image_path: image_path.value });
+    const result = await invoke("ps_ocr", {image_path: image_path.value});
     console.log(result, 'ocr结果');
     image_ocr.value = result;
     const size = await getSize();

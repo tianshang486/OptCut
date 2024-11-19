@@ -1,15 +1,22 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod config;
+mod utils;
+
+use std::borrow::Cow;
 use config::Config;
-use image::open;
+use image::{open, ImageFormat};
 use mouse_position::mouse_position::Mouse;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
 use std::env;
+use std::error::Error;
 use std::io::Read;
 use std::process::Command;
+use arboard::{Clipboard, ImageData};
 use tauri::Manager;
 use xcap::{image, Monitor};
+use crate::utils::{img_util};
+
 
 // fn greet(image_path: &str) {
 //     // 根据传入的 img_path 创建完整的命令
@@ -24,7 +31,6 @@ use xcap::{image, Monitor};
 // }
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    println!("当前工作目录: {:?}", env::current_dir());
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -35,7 +41,8 @@ pub fn run() {
             capture_screen_one,
             capture_screen_fixed,
             ps_ocr,
-            get_base64,
+            copied_to_clipboard,
+            // get_clipboard_image
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -56,6 +63,34 @@ impl Struct {
         Self { image_path }
     }
 }
+
+
+#[derive(Default, Debug, Clone, Deserialize, Serialize)]
+pub struct ImageDataDB {
+    pub width: usize,
+    pub height: usize,
+    pub base64: String,
+}
+
+pub struct ClipBoardOprator;
+
+impl ClipBoardOprator {
+    pub fn set_text(text: String) -> Result<String, String> {
+        let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
+        clipboard.set_text(text).map_err(|e| e.to_string())?;
+        Ok("设置成功".to_string())
+    }
+
+    pub fn set_image(data: ImageData) -> Result<String, String> {
+        let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
+        // let img_data = img_util::base64_to_rgba8(&data.base64)?;
+        // clipboard.set_image(img_data).map_err(|e| e.to_string())?;
+        clipboard.set_image(data).map_err(|e| e.to_string())?;
+        println!("图片已复制到剪贴板");
+        Ok("设置成功".to_string())
+    }
+}
+
 
 #[tauri::command(rename_all = "snake_case")]
 fn ps_ocr(image_path: &str) -> Result<String, String> {
@@ -177,12 +212,33 @@ fn capture_screen_fixed(x: i32, y: i32, width: u32, height: u32) -> Result<Strin
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn get_base64(image_path: &str) -> Result<Vec<u8>, String> {
-    // 读取图片数据为字节数组返回给前端
-    let mut file = std::fs::File::open(image_path).map_err(|_| "打开图片失败".to_string())?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer).map_err(|_| "读取图片失败".to_string())?;
-
-    Ok(buffer)
+fn copied_to_clipboard(image_path: &str) -> Result<String, String> {
+    let set_image = ClipBoardOprator::set_image;
+    // 读取图片数据为base64
+    let img = img_util::image_to_base64(image_path.as_ref()).map_err(|e| e.to_string())?;
+    // // 转换为ImageData
+    let img_db = img_util::base64_to_rgba8(&img)?;
+    // // 构建ImageDataDB
+    // let base64 = img_util::rgba8_to_base64(&img_db);
+    // println!("图片base64已转换");
+    // let content_db = ImageDataDB {
+    //     width: img_db.width,
+    //     height: img_db.height,
+    //     base64: img,
+    // };
+    // 保存到剪贴板
+    set_image(img_db).map_err(|e| e.to_string())?;
+    // 清空缓存
+    drop(img);
+    Ok(json!({
+        "success": true,
+        "message": "图片已复制到剪贴板"
+    })
+        .to_string())
 }
+
+
+
+
+
 
