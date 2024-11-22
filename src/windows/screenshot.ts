@@ -12,13 +12,14 @@ interface ScreenshotResult {
 }
 
 export async function captureScreenshot() {
+    console.log('开始截图')
     try {
         const result: ScreenshotResult = JSON.parse(await invoke('capture_screen_one'));
         if (!result?.path) {
             console.error('截图失败：未获取到有效结果');
             return;
         }
-        console.log('截图成功：', result)
+
         const imgUrl = convertFileSrc(result.path);
         const win = new Windows();
         const url = `/#/screenshot?path=${imgUrl}`;
@@ -27,18 +28,17 @@ export async function captureScreenshot() {
             label: 'screenshot',
             title: 'screenshot',
             url: url,
-            width: result.width + 1,
-            height: result.height + 1,
+            width: result.width,
+            height: result.height,
             x: result.window_x,
             y: result.window_y,
         };
-        console.log('截图成功：', windowOptions)
+
         await win.createWin(windowOptions, result.path);
     } catch (error) {
         console.error('截图过程发生错误:', error);
     }
 }
 
-
 // 导出方法
-export default {captureScreenshot}
+// export default {captureScreenshot}

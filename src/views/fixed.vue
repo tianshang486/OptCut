@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {Windows,} from '@/windows/create'
+// import {createText} from '@/windows/text_ocr_create.ts'
 import {writeImage} from "@tauri-apps/plugin-clipboard-manager";
 import ContextMenu from '@imengyu/vue3-context-menu'
 import {onMounted, onUnmounted, Ref, ref, UnwrapRef} from "vue";
@@ -10,7 +11,7 @@ import {Image} from "@tauri-apps/api/image";
 const url: any = window.location.hash.slice(window.location.hash.indexOf('?') + 1);
 const path: any = new URLSearchParams(url).get('path')
 
-const image_ocr: any = ref('')
+const image_ocr: any = ref([])
 // 从path路径http://asset.localhost/C:\Users\zxl\AppData\Local\Temp\AGCut_1731571102.png截取图片路径
 const image_path: any = ref(path.replace('http://asset.localhost/', ''))
 const is_ocr: Ref<UnwrapRef<boolean>, UnwrapRef<boolean> | boolean> = ref(false)
@@ -33,11 +34,22 @@ async function readFileImage(path: string) {
   return await Image.fromPath(path)
 }
 
+
 // 复制图片到剪贴板
 const copyImage = async (path: string) => {
   // await invoke("copied_to_clipboard", {image_path: path});
   const img: any = await readFileImage(path);
-  await writeImage(img);
+  // 如果失败则重试,如果提示线程没有打开的粘贴板，则需要打开粘贴板
+  try {
+    await writeImage(img);
+    alert('复制成功');
+  } catch (e) {
+    console.error(e);
+    //   延迟2秒重试
+    setTimeout(() => {
+      copyImage(path);
+    }, 3000);
+  }
 };
 
 // 右键点击事件处理器
@@ -97,31 +109,63 @@ const ocr = async () => {
   if (image_path.value === '' || image_path.value === null) {
     alert('请先截图');
     return;
-  } else {
-    const result = await invoke("ps_ocr", {image_path: image_path.value});
-    console.log(result, 'ocr结果');
-    image_ocr.value = result;
-    const size = await getSize();
-    if (size !== null) {
-      // 只增加宽度，高度保持不变
-      resize(size.width + 300, size.height);
+  }
+  
+  try {
+    const result: any = await invoke("ps_ocr", {image_path: image_path.value});
+    console.log('原始OCR结果:', result);
+    
+    let parsedResult = typeof result === 'string' ? JSON.parse(result) : result;
+    
+    // 因为结果是数组，取第一个元素
+    const ocrData = Array.isArray(parsedResult) ? parsedResult[0] : parsedResult;
+    
+    if (ocrData && ocrData.code === 100 && Array.isArray(ocrData.data)) {
+      console.log('处理后的数据:', ocrData);
+      image_ocr.value = ocrData;  // 保存处理后的对象
       is_ocr.value = true;
+      
+      const size = await getSize();
+      if (size !== null) {
+        resize(size.width + 300, size.height);
+      }
     } else {
-      console.error('无法获取窗口大小');
+      console.error('数据格式不正确:', ocrData);
     }
+  } catch (error) {
+    console.error('OCR处理错误:', error);
   }
 };
 </script>
 
 <template>
   <div class="screenshot-container">
-    <!-- 当 is_ocr 为 false 时，图片占满整个容器 -->
     <img :src="path" alt="Screenshot" class="screenshot-image full" v-if="!is_ocr"/>
-    <!-- 当 is_ocr 为 true 时，图片和链接并排显示 -->
     <div class="content" v-if="is_ocr">
-      <img :src="path" alt="Screenshot" class="screenshot-image"/>
-      <div class="link">
-        <p>{{ image_ocr }}</p>
+      <div class="image-container">
+        <img :src="path" alt="Screenshot" class="screenshot-image"/>
+        <div class="ocr-overlay">
+          <div 
+            v-for="(item, index) in image_ocr?.data" 
+            :key="index"
+            class="ocr-text"
+            :style="{
+              position: 'absolute',
+              left: `${Math.round(item.box[0][0])}px`,
+              top: `${Math.round(item.box[0][1])}px`,
+              width: `${Math.round(item.box[2][0] - item.box[0][0])}px`,
+              height: `${Math.round(item.box[2][1] - item.box[0][1])}px`,
+              lineHeight: `${Math.round(item.box[2][1] - item.box[0][1])}px`,
+            }"
+          >
+            {{ item.text }}
+          </div>
+        </div>
+      </div>
+      <div id="container" class="link">
+        <div v-for="(item, index) in image_ocr?.data" :key="index">
+          <p>{{ item.text }}</p>
+        </div>
       </div>
     </div>
   </div>
@@ -196,4 +240,47 @@ const ocr = async () => {
 
 
 }
+
+/* 添加新的样式 */
+.image-container {
+  position: relative;
+  width: calc(100vw - 300px);
+  height: 100vh;
+}
+
+.ocr-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.ocr-text {
+  background: transparent;
+  color: transparent;
+  cursor: text;
+  user-select: text;
+  pointer-events: auto;
+  position: absolute;
+  font-size: 13px;
+  padding: 0;
+  margin: 0;
+  white-space: nowrap;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+}
+
+/* 鼠标悬停时显示半透明背景 */
+.ocr-text:hover {
+  background: rgba(255, 255, 0, 0.1);
+  border: 1px solid rgba(255, 255, 0, 0.3);
+}
+
+/* 移除自定义选中样式，使用系统默认的蓝色选中效果 */
+/* .ocr-text::selection {
+  // 移除这部分，让系统默认选中效果生效
+} */
+
 </style>

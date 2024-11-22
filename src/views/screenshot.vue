@@ -1,17 +1,13 @@
 <script setup lang="ts">
 import {Windows,} from '@/windows/create'
+import {copyImage,} from '@/windows/method'
 import {onMounted, onUnmounted, ref} from "vue";
 import {PhysicalPosition} from '@tauri-apps/api/window';
 import {convertFileSrc, invoke} from "@tauri-apps/api/core";
 import {emitTo} from "@tauri-apps/api/event";
-import {writeImage} from "@tauri-apps/plugin-clipboard-manager";
-import {Image} from "@tauri-apps/api/image";
-// import {transformImage, Image} from "@tauri-apps/api/image";
-
-
 // 从url中获取截图路径?path=' + result.path,
 const url: any = window.location.hash.slice(window.location.hash.indexOf('?') + 1);
-const path: any = ref(new URLSearchParams(url).get('path'))
+const path: any = new URLSearchParams(url).get('path')
 console.log('截图路径', path)
 
 const win: any = new Windows()
@@ -125,16 +121,6 @@ interface ScreenshotResult {
   window_y: number;
 }
 
-async function readFileImage(path: string) {
-  return await Image.fromPath(path)
-}
-
-// 复制图片到剪贴板
-const copyImage = async (path: string) => {
-  // await invoke("copied_to_clipboard", {image_path: path});
-  const img: any = await readFileImage(path);
-  await writeImage(img);
-};
 
 // const copyImage = async ( path: string ) => {
 //   // await invoke('copied_to_clipboard', {
@@ -150,14 +136,13 @@ const copyImage = async (path: string) => {
 
 async function handleCopyImage() {
   try {
-    await copyImage(path.value.replace('http://asset.localhost/', ''))
+    console.log('开始复制图片')
+    await copyImage(path.replace('http://asset.localhost/', ''))
     // const transformedImage: any = transformImage(result);
     // // 写入剪切板
     // await writeImage(transformedImage);
     // js将url图片写到剪切板
     // const imgUrl = convertFileSrc(transformedImage);
-
-    console.log('图片转换成功')
     // await win.closeWin('screenshot');
   } catch (e) {
     console.error(e, '图片转换失败')
