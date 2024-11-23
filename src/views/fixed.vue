@@ -156,6 +156,7 @@ const ocr = async () => {
               width: `${Math.round(item.box[2][0] - item.box[0][0])}px`,
               height: `${Math.round(item.box[2][1] - item.box[0][1])}px`,
               lineHeight: `${Math.round(item.box[2][1] - item.box[0][1])}px`,
+              fontSize: `${Math.round((item.box[2][1] - item.box[0][1]) * 0.9)}px`,
             }"
           >
             {{ item.text }}
@@ -263,7 +264,7 @@ const ocr = async () => {
   user-select: text;
   pointer-events: auto;
   position: absolute;
-  font-size: 13px;
+  font-size: 14px;
   padding: 0;
   margin: 0;
   white-space: nowrap;

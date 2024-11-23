@@ -14,9 +14,9 @@ use std::process::Command;
 use tauri::Manager;
 use xcap::{image, Monitor};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind, MessageDialogButtons};
-
+use utils::tray;
+use crate::utils::color;
 // use crate::utils::{img_util};
-
 
 // fn greet(image_path: &str) {
 //     // 根据传入的 img_path 创建完整的命令
@@ -42,6 +42,7 @@ pub fn run() {
             capture_screen_fixed,
             ps_ocr,
             delete_temp_file,
+            get_color_at,
         ])
         // 阻止默认关闭事件,弹窗提示是否关闭窗口
         .on_window_event(|window, event| match event {
@@ -59,14 +60,27 @@ pub fn run() {
                             .kind(MessageDialogKind::Error)
                             .buttons(MessageDialogButtons::YesNo)
                             .blocking_show();
-
                         if result {
                             window.app_handle().exit(0);
                         }
                     });
                 }
             }
+            // 修改最小化事件处理
+            tauri::WindowEvent::Resized(_) => {
+                if window.label() == "main" && window.is_minimized().unwrap_or(false) {
+                    window.hide().unwrap();
+                }
+            }
             _ => {}
+        })
+        .setup(|app| {
+            #[cfg(all(desktop))]
+            {
+                let handle = app.handle();
+                tray::create_tray(handle)?;
+            }
+            Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -88,33 +102,11 @@ impl Struct {
     }
 }
 
-
-// #[derive(Default, Debug, Clone, Deserialize, Serialize)]
-// pub struct ImageDataDB {
-//     pub width: usize,
-//     pub height: usize,
-//     pub base64: String,
-// }
-
-// pub struct ClipBoardOprator;
-//
-// impl ClipBoardOprator {
-//     pub fn set_text(text: String) -> Result<String, String> {
-//         let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
-//         clipboard.set_text(text).map_err(|e| e.to_string())?;
-//         Ok("设置成功".to_string())
-//     }
-//
-//     pub fn set_image(data: ImageData) -> Result<String, String> {
-//         let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
-//         // let img_data = img_util::base64_to_rgba8(&data.base64)?;
-//         // clipboard.set_image(img_data).map_err(|e| e.to_string())?;
-//         clipboard.set_image(data).map_err(|e| e.to_string())?;
-//         println!("图片已复制到剪贴板");
-//         Ok("设置成功".to_string())
-//     }
-// }
-//
+// 获取颜色的 Tauri 命令
+#[tauri::command]
+fn get_color_at(x: i32, y: i32) -> Result<String, String> {
+    color::get_pixel_color(x, y)
+}
 
 #[tauri::command(rename_all = "snake_case")]
 fn ps_ocr(image_path: &str) -> Result<String, String> {
@@ -289,7 +281,3 @@ fn delete_temp_file() {
         }
     }
 }
-
-
-
-

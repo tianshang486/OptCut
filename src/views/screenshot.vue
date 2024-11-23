@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {Windows,} from '@/windows/create'
 import {copyImage,} from '@/windows/method'
-import {onMounted, onUnmounted, ref} from "vue";
+import {onMounted, onUnmounted, ref, computed} from "vue";
 import {PhysicalPosition} from '@tauri-apps/api/window';
 import {convertFileSrc, invoke} from "@tauri-apps/api/core";
 import {emitTo} from "@tauri-apps/api/event";
@@ -40,15 +40,55 @@ const currentPos = ref({x: 0, y: 0})
 const overlayStyle = ref({})
 const mouseUpPos = ref({x: 0, y: 0})
 const mouseDownPos = ref({x: 0, y: 0})
+const selectionStyle = computed(() => {
+  if (!isDragging.value) {
+    return {
+      width: '0px',
+      height: '0px',
+      display: 'none'
+    }
+  }
 
+  const width = Math.abs(currentPos.value.x - startPos.value.x)
+  const height = Math.abs(currentPos.value.y - startPos.value.y)
+  const left = Math.min(currentPos.value.x, startPos.value.x)
+  const top = Math.min(currentPos.value.y, startPos.value.y)
 
-const selectionStyle = ref({
-  left: '0px',
-  top: '0px',
-  width: '0px',
-  height: '0px',
-  display: 'none'
+  return {
+    width: width + 'px',
+    height: height + 'px',
+    left: left + 'px',
+    top: top + 'px',
+    border: '1px solid #1e90ff'
+  }
 })
+const mousePos = ref({ x: 0, y: 0 });
+const currentColor = ref('#000000')
+let lastColorUpdate = 0;
+
+// 节流函数，限制执行频率
+const throttle = (fn: Function, delay: number) => {
+  let lastTime = 0;
+  return (...args: any[]) => {
+    const now = Date.now();
+    if (now - lastTime >= delay) {
+      fn(...args);
+      lastTime = now;
+    }
+  };
+};
+
+// 获取颜色的函数
+const updateColor = async (x: number, y: number) => {
+  try {
+    currentColor.value = await invoke('get_color_at', { x, y })
+  } catch (error) {
+    console.error('获取颜色失败:', error)
+  }
+};
+
+// 使用节流包装的颜色更新函数
+const throttledUpdateColor = throttle(updateColor, 500);
 
 // 添加鼠标事件处理函数
 // 在 handleMouseDown 中初始化
@@ -83,13 +123,20 @@ const handleMouseDown = (e: MouseEvent) => {
 const handleMouseMove = async (e: MouseEvent) => {
   if (!isDragging.value) return;
   e.preventDefault();
-  currentPos.value = {x: e.clientX, y: e.clientY};
+  
+  // 更新当前位置
+  currentPos.value = {
+    x: Math.round(e.clientX), // 取整以避免小数点导致的抖动
+    y: Math.round(e.clientY)
+  };
+
   // 计算选择框的位置和大小
   const left = Math.min(startPos.value.x, currentPos.value.x);
   const top = Math.min(startPos.value.y, currentPos.value.y);
   const width = Math.abs(currentPos.value.x - startPos.value.x);
   const height = Math.abs(currentPos.value.y - startPos.value.y);
 
+  // 更新选择框样式
   selectionStyle.value = {
     left: `${left}px`,
     top: `${top}px`,
@@ -97,8 +144,8 @@ const handleMouseMove = async (e: MouseEvent) => {
     height: `${height}px`,
     display: 'block'
   };
-  console.log('移动', left, top, width, height)
-  // 修改遮罩层的 clipPath
+
+  // 更新遮罩层的 clipPath
   overlayStyle.value = {
     clipPath: `polygon(
       0 0, 100% 0, 100% 100%, 0 100%,
@@ -110,7 +157,6 @@ const handleMouseMove = async (e: MouseEvent) => {
       ${left}px ${top}px
     )`
   };
-
 }
 
 interface ScreenshotResult {
@@ -120,19 +166,6 @@ interface ScreenshotResult {
   window_x: number;
   window_y: number;
 }
-
-
-// const copyImage = async ( path: string ) => {
-//   // await invoke('copied_to_clipboard', {
-//   //   image_path: path.replace('http://asset.localhost/', '')
-//   // })
-//   const result: any = await invoke('get_clipboard_image', {
-//     image_path: path.replace('http://asset.localhost/', '')
-//   })
-//
-//   await writeImage(result)
-//   console.log('复制成功')
-// }
 
 async function handleCopyImage() {
   try {
@@ -156,7 +189,11 @@ const handleMouseUp = async (e: MouseEvent) => {
   if (!isMouseDown) return;
   e.preventDefault();
   isDragging.value = false;
-  selectionStyle.value.display = 'none';
+  selectionStyle.value = {
+    width: '0px',
+    height: '0px',
+    display: 'none'
+  };
   overlayStyle.value = {};
   mouseDownPos.value = new PhysicalPosition(
       e.screenX,
@@ -212,85 +249,140 @@ const handleMouseUp = async (e: MouseEvent) => {
   }
 }
 
+// 全局鼠标移动处理
+const handleGlobalMouseMove = (e: MouseEvent) => {
+  mousePos.value = {
+    x: e.clientX,
+    y: e.clientY
+  };
+  throttledUpdateColor(e.clientX, e.clientY);
+};
+
 // 添加事件监听
 onMounted(() => {
   document.addEventListener('mousedown', handleMouseDown)
   document.addEventListener('mousemove', handleMouseMove)
   document.addEventListener('mouseup', handleMouseUp)
+  document.addEventListener('mousemove', handleGlobalMouseMove)
 })
 
 onUnmounted(() => {
   document.removeEventListener('mousedown', handleMouseDown)
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', handleMouseUp)
+  document.removeEventListener('mousemove', handleGlobalMouseMove)
 })
 
+// 添加计算属性
+const selectionWidth = computed(() => {
+  return Math.abs(currentPos.value.x - startPos.value.x)
+})
+
+const selectionHeight = computed(() => {
+  return Math.abs(currentPos.value.y - startPos.value.y)
+})
 </script>
 <template>
-  <div class="screenshot-container">
+  <div class="screenshot-container" @mousemove="handleGlobalMouseMove">
     <img :src="path" alt="Screenshot" class="screenshot-image" @click="handleCopyImage" />
-    <div class="overlay" v-show="isDragging" :style="overlayStyle"></div>
-    <div class="selection" :style="selectionStyle"></div>
+    <div class="selection-box" :style="selectionStyle"></div>
+    <div class="overlay" :style="overlayStyle"></div>
+    <div class="coordinates-info" v-if="isDragging" 
+         :style="{ 
+           left: startPos.x + 'px', 
+           top: (startPos.y - 45) + 'px',
+           transform: startPos.y < 60 ? 'translateY(60px)' : 'none'
+         }">
+      <span>起点: ({{ startPos.x }}, {{ startPos.y }})</span>
+      <span>大小: {{ selectionWidth }} x {{ selectionHeight }}</span>
+    </div>
+    <div class="color-indicator" :style="{ left: mousePos.x + 15 + 'px', top: mousePos.y + 15 + 'px' }">
+      <div class="color-preview" :style="{ backgroundColor: currentColor }"></div>
+      <div class="color-value">{{ currentColor }}</div>
+    </div>
   </div>
 </template>
 
-
 <style scoped>
-/* 重置所有默认样式 */
-:root {
-  margin: 0 !important;
-  padding: 0 !important;
-  background: transparent !important;
-}
-
-
-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  /* 图片居中 */
-  position: absolute;
-  top: 0;
-  left: 0;
-}
-
 .screenshot-container {
   position: fixed;
-  /* 改为 fixed */
   top: 0;
   left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
   margin: 0;
   padding: 0;
 }
 
 .screenshot-image {
-  width: 100vw;
-  /* 使用 vw 单位 */
-  height: 100vh;
-  object-fit: cover;
   position: fixed;
-  /* 改为 fixed */
   top: 0;
   left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   margin: 0;
   padding: 0;
+  z-index: 1;
 }
 
 .overlay {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.5);
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 2;
   pointer-events: none;
 }
 
-.selection {
+.selection-box {
   position: fixed;
-  border: 1px solid #1890ff;
   background: transparent;
+  border: 1px solid #1e90ff;
+  z-index: 3;
   pointer-events: none;
-  z-index: 1000;
+}
+
+.coordinates-info {
+  position: fixed;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 9999;
+  display: flex;
+  gap: 12px;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.color-indicator {
+  position: fixed;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-preview {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.color-value {
+  color: white;
+  font-size: 12px;
+  font-family: monospace;
 }
 </style>
