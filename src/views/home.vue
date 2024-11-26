@@ -2,6 +2,7 @@
 import {invoke} from "@tauri-apps/api/core";
 import {open} from '@tauri-apps/plugin-dialog';
 import {captureScreenshot} from '@/windows/screenshot.ts'
+import {tray_close} from '@/windows/tray.ts'
 import {ref} from "vue";
 
 const image_path = ref("");
@@ -22,7 +23,7 @@ async function openDialog() {
   await invoke("capture_screen",);
 }
 
-const imgurl = ref('');
+const imgurl: any = ref('');
 
 // 删除临时图片
 async function removeImg() {
@@ -35,6 +36,7 @@ async function removeImg() {
   <button @click="captureScreenshot">Capture Screenshot</button>
   <button type="button" @click="openDialog">Open Dialog</button>
   <button type="button" @click="removeImg">Remove Img</button>
+  <button type="button" @click="() => tray_close()">Close Tray</button>
   <img v-if="imgurl" :src="imgurl" class="fixed top-0 left-0 w-full select-none" alt=""/>
 </template>
 

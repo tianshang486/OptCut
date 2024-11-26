@@ -40,7 +40,7 @@ const currentPos = ref({x: 0, y: 0})
 const overlayStyle = ref({})
 const mouseUpPos = ref({x: 0, y: 0})
 const mouseDownPos = ref({x: 0, y: 0})
-const selectionStyle = computed(() => {
+let selectionStyle: any = computed(() => {
   if (!isDragging.value) {
     return {
       width: '0px',
@@ -64,7 +64,7 @@ const selectionStyle = computed(() => {
 })
 const mousePos = ref({ x: 0, y: 0 });
 const currentColor = ref('#000000')
-let lastColorUpdate = 0;
+
 
 // 节流函数，限制执行频率
 const throttle = (fn: Function, delay: number) => {

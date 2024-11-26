@@ -1,21 +1,22 @@
 <script setup lang="ts">
 import {Windows,} from '@/windows/create'
 // import {createText} from '@/windows/text_ocr_create.ts'
-import {writeImage} from "@tauri-apps/plugin-clipboard-manager";
-import ContextMenu from '@imengyu/vue3-context-menu'
 import {onMounted, onUnmounted, Ref, ref, UnwrapRef} from "vue";
 import {invoke} from "@tauri-apps/api/core";
-import {Image} from "@tauri-apps/api/image";
+import {listen} from "@tauri-apps/api/event";
 
 // 从url中获取截图路径?path=' + result.path,
 const url: any = window.location.hash.slice(window.location.hash.indexOf('?') + 1);
 const path: any = new URLSearchParams(url).get('path')
 
-const image_ocr: any = ref([])
+
 // 从path路径http://asset.localhost/C:\Users\zxl\AppData\Local\Temp\AGCut_1731571102.png截取图片路径
 const image_path: any = ref(path.replace('http://asset.localhost/', ''))
+const image_ocr: any = ref([])
 const is_ocr: Ref<UnwrapRef<boolean>, UnwrapRef<boolean> | boolean> = ref(false)
-
+// 用于跟踪菜单状态
+const isMenuOpen = ref(false);
+let menuBounds = { x: 0, y: 0, width: 200, height: 500 };
 
 const win = new Windows()
 
@@ -30,101 +31,26 @@ function getSize() {
   return win.getWinSize('fixed')
 }
 
-async function readFileImage(path: string) {
-  return await Image.fromPath(path)
-}
-
-
-// 复制图片到剪贴板
-const copyImage = async (path: string) => {
-  // await invoke("copied_to_clipboard", {image_path: path});
-  const img: any = await readFileImage(path);
-  // 如果失败则重试,如果提示线程没有打开的粘贴板，则需要打开粘贴板
-  try {
-    await writeImage(img);
-    alert('复制成功');
-  } catch (e) {
-    console.error(e);
-    //   延迟2秒重试
-    setTimeout(() => {
-      copyImage(path);
-    }, 3000);
-  }
-};
-
-// 右键点击事件处理器
-const onContextMenu = async (e: MouseEvent) => {
-  e.preventDefault();
-  ContextMenu.showContextMenu({
-    x: e.clientX, // 使用 clientX 和 clientY 而不是 e.x 和 e.y
-    y: e.clientY,
-    theme: "mac dark",
-    items: [
-      {
-        label: "A menu item",
-        onClick: () => {
-          alert("You click a menu item");
-        }
-      },
-      {
-        label: "A submenu",
-        children: [
-          {
-            label: "复制图片", onClick: async () => {
-              await copyImage(image_path.value);
-            }
-          },
-          {
-            label: "复制OCR结果", onClick: async () => {
-              await ocr();
-            }
-          },
-          {
-            label: "关闭", onClick: async () => {
-              await win.closeWin('fixed');
-            }
-          },
-        ]
-      },
-    ]
-  });
-};
-
-// 在组件挂载时添加事件监听器
-onMounted(() => {
-  document.addEventListener('contextmenu', onContextMenu);
-});
-
-// 在组件卸载时移除事件监听器
-onUnmounted(() => {
-  document.removeEventListener('contextmenu', onContextMenu);
-});
-
-// OCR
-// listen("OCRImage", async (event) => {
-//   image_path.value = event.payload
-//   console.log(event.payload)
-// });
 const ocr = async () => {
   if (image_path.value === '' || image_path.value === null) {
     alert('请先截图');
     return;
   }
-  
+
   try {
     const result: any = await invoke("ps_ocr", {image_path: image_path.value});
     console.log('原始OCR结果:', result);
-    
+
     let parsedResult = typeof result === 'string' ? JSON.parse(result) : result;
-    
+
     // 因为结果是数组，取第一个元素
     const ocrData = Array.isArray(parsedResult) ? parsedResult[0] : parsedResult;
-    
+
     if (ocrData && ocrData.code === 100 && Array.isArray(ocrData.data)) {
       console.log('处理后的数据:', ocrData);
       image_ocr.value = ocrData;  // 保存处理后的对象
       is_ocr.value = true;
-      
+
       const size = await getSize();
       if (size !== null) {
         resize(size.width + 300, size.height);
@@ -136,6 +62,120 @@ const ocr = async () => {
     console.error('OCR处理错误:', error);
   }
 };
+
+// 监听copyImage
+listen("ocrImage", async () => {
+  // if (event.payload === null) {
+  //   path.value = image_path.value;
+  //   return;
+  // } else {
+  //   path.value = event.payload;
+  // }
+  await ocr();
+});
+
+async function CreateContextMenu(event: any) {
+  // 禁用默认右键菜单
+  event.preventDefault();
+  
+  // 如果菜单已经打开，先关闭它
+  if (isMenuOpen.value) {
+    await closeWin();
+  }
+  
+  // 获取点击位置
+  const x = event.screenX - 20;
+  const y = event.screenY - 10;
+  
+  // 保存菜单位置信息
+  menuBounds = {
+    x: x,
+    y: y,
+    width: 100,
+    height: 300
+  };
+  // /#/fixed_menu 给url添加参数,image_path
+  const urlWithParams = `/#/contextmenu?path=${image_path.value}&label=fixed`;
+  console.log(urlWithParams)
+
+
+  const options = {
+    label: 'contextmenu',
+    x: x,
+    y: y,
+    width: menuBounds.width,
+    height: menuBounds.height,
+    title: '菜单',
+    url: urlWithParams,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreen: false,
+    dragDropEnabled: true,
+    center: false,
+    shadow: true,
+    theme: 'dark',
+    hiddenTitle: true,
+    skipTaskbar: true,
+    decorations: false,
+  };
+  
+  await win.createWin(options, {x: event.x, y: event.y});
+  isMenuOpen.value = true;
+  
+  // 添加全局鼠标移动监听
+  document.addEventListener('mousemove', handleMouseMove);
+}
+
+// 处理鼠标移动
+function handleMouseMove(event: MouseEvent) {
+  if (!isMenuOpen.value) return;
+  
+  // 检查鼠标是否在菜单区域外
+  const mouseX = event.screenX;
+  const mouseY = event.screenY;
+  
+  if (mouseX < menuBounds.x || 
+      mouseX > menuBounds.x + menuBounds.width || 
+      mouseY < menuBounds.y || 
+      mouseY > menuBounds.y + menuBounds.height) {
+    closeWin();
+  }
+}
+
+// 关闭窗口
+async function closeWin() {
+  await win.closeWin('contextmenu');
+  isMenuOpen.value = false;
+  // 移除鼠标移动监听
+  document.removeEventListener('mousemove', handleMouseMove);
+}
+
+// 右键点击事件处理器
+
+// 在组件挂载时添加事件监听器
+onMounted(() => {
+  document.addEventListener('contextmenu', CreateContextMenu);
+});
+
+// 在组件卸载时移除事件监听器
+onUnmounted(() => {
+  document.removeEventListener('contextmenu', CreateContextMenu);
+  document.removeEventListener('mousemove', handleMouseMove);
+  // 如果菜单还开着，确保关闭
+  if (isMenuOpen.value) {
+    closeWin();
+  }
+});
+
+// OCR
+// listen("OCRImage", async (event) => {
+//   image_path.value = event.payload
+//   console.log(event.payload)
+// });
+
 </script>
 
 <template>

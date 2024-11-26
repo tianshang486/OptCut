@@ -1,5 +1,6 @@
 import {isRegistered, register, ShortcutEvent} from '@tauri-apps/plugin-global-shortcut';
 import {captureScreenshot} from '@/windows/screenshot.ts'
+import {listen} from "@tauri-apps/api/event";
 
 
 export async function registerShortcuts() {
@@ -12,4 +13,11 @@ export async function registerShortcuts() {
             }
         });
     }
+}
+
+export async function listenShortcuts() {
+    await listen('screenshots', (event: any) => {
+        console.log(event, '截图事件')
+        captureScreenshot();
+    });
 }

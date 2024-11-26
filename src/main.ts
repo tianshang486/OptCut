@@ -1,17 +1,22 @@
 import {createApp} from "vue";
 import App from "./App.vue";
-import router from './router/index'
-import '@imengyu/vue3-context-menu/lib/vue3-context-menu.css'
-import ContextMenu from '@imengyu/vue3-context-menu'
-import {registerShortcuts} from '@/windows/ShortcutRegistration';
-import VueKonva from 'vue-konva';
-import {tray_main} from "@/windows/tray"
+import router from './router/index';
+import {registerShortcuts,listenShortcuts} from '@/windows/ShortcutRegistration';
 
-tray_main().then(r => {
-    console.log('Tray initialized successfully', r)
-})
+// import {initializeTray, tray_close} from "@/windows/tray"
 
-registerShortcuts().then(r => {
-    console.log('Shortcuts registered successfully', r)
-})
-createApp(App).use(VueKonva).use(ContextMenu).use(router).mount("#app");
+// 创建应用实例
+const app = createApp(App);
+
+// 注册插件
+app.use(router);
+
+// 应用挂载完成后初始化托盘
+app.mount("#app");
+
+async function main() {
+    await registerShortcuts();
+    await listenShortcuts();
+}
+
+main().then(r => { console.log("main done", r) }); // 调用主函数

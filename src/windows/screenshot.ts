@@ -30,6 +30,7 @@ export async function captureScreenshot() {
             url: url,
             width: result.width,
             height: result.height,
+            fullscreen: true,
             x: result.window_x,
             y: result.window_y,
         };
