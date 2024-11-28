@@ -2,21 +2,20 @@
 mod config;
 mod utils;
 use config::Config;
-use image::{open, ImageFormat};
+use image::{open};
 use mouse_position::mouse_position::Mouse;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
 use std::env;
 use std::error::Error;
 use std::io::Read;
+use std::os::windows::process::CommandExt;
 use std::process::Command;
-// use arboard::{Clipboard, ImageData};
 use tauri::Manager;
 use xcap::{image, Monitor};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind, MessageDialogButtons};
 use utils::tray;
 use crate::utils::color;
-// use crate::utils::{img_util};
 
 // fn greet(image_path: &str) {
 //     // 根据传入的 img_path 创建完整的命令
@@ -79,6 +78,9 @@ pub fn run() {
             {
                 let handle = app.handle();
                 tray::create_tray(handle)?;
+                // 获取主窗口并设置为隐藏
+                // let window = app.get_window("main").unwrap();
+                // window.hide().unwrap();
             }
             Ok(())
         })
@@ -125,7 +127,14 @@ fn ps_ocr(image_path: &str) -> Result<String, String> {
         .join("RapidOCR-json_v0.2.0")
         .join("models");
 
-    let output = Command::new(exe_path)
+    #[cfg(target_os = "windows")]
+    let mut command = Command::new(exe_path);
+    #[cfg(target_os = "windows")]
+    command.creation_flags(0x08000000); // CREATE_NO_WINDOW flag
+    #[cfg(not(target_os = "windows"))]
+    let mut command = Command::new(exe_path);
+
+    let output = command
         .arg("--models")
         .arg(models_path)
         .arg("--det")
@@ -213,7 +222,7 @@ fn capture_screen_fixed(x: i32, y: i32, width: u32, height: u32) -> Result<Strin
     // 读取原始截图
     let mut img = open(&my_struct.image_path).map_err(|_| "无法打开原始图片".to_string())?;
     // 根据鼠标位置获取图片裁剪位置,注意鼠标位置存在负值,需要与屏幕尺寸相加
-    println!("{} {} 图片尺寸", img.width(), x);
+    // println!("{} {} 图片尺寸", img.width(), x);
     let x_new: i32 = if x < 0 {
         img.width() as i32 + x as i32
     } else if img.width() < x as u32 && x > 0 {
@@ -221,7 +230,7 @@ fn capture_screen_fixed(x: i32, y: i32, width: u32, height: u32) -> Result<Strin
     } else {
         x
     };
-    println!("图片尺寸: {}x{} x,y: {},{}", width, height, x_new, y);
+    // println!("图片尺寸: {}x{} x,y: {},{}", width, height, x_new, y);
     // 裁剪图片
     let cropped = img.crop(x_new as u32, y as u32, width, height);
     // 保存裁剪后的图片,增加时间戳避免覆盖

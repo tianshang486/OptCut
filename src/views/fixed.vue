@@ -3,7 +3,8 @@ import {Windows,} from '@/windows/create'
 // import {createText} from '@/windows/text_ocr_create.ts'
 import {onMounted, onUnmounted, Ref, ref, UnwrapRef} from "vue";
 import {invoke} from "@tauri-apps/api/core";
-import {listen} from "@tauri-apps/api/event";
+import {emit, listen} from "@tauri-apps/api/event";
+
 
 // 从url中获取截图路径?path=' + result.path,
 const url: any = window.location.hash.slice(window.location.hash.indexOf('?') + 1);
@@ -15,8 +16,8 @@ const image_path: any = ref(path.replace('http://asset.localhost/', ''))
 const image_ocr: any = ref([])
 const is_ocr: Ref<UnwrapRef<boolean>, UnwrapRef<boolean> | boolean> = ref(false)
 // 用于跟踪菜单状态
-const isMenuOpen = ref(false);
-let menuBounds = { x: 0, y: 0, width: 200, height: 500 };
+
+let menuBounds = {x: 0, y: 0, width: 200, height: 500};
 
 const win = new Windows()
 
@@ -60,6 +61,7 @@ const ocr = async () => {
     }
   } catch (error) {
     console.error('OCR处理错误:', error);
+    alert('OCR处理失败' + error);
   }
 };
 
@@ -77,16 +79,11 @@ listen("ocrImage", async () => {
 async function CreateContextMenu(event: any) {
   // 禁用默认右键菜单
   event.preventDefault();
-  
-  // 如果菜单已经打开，先关闭它
-  if (isMenuOpen.value) {
-    await closeWin();
-  }
-  
+
   // 获取点击位置
   const x = event.screenX - 20;
   const y = event.screenY - 10;
-  
+
   // 保存菜单位置信息
   menuBounds = {
     x: x,
@@ -97,7 +94,6 @@ async function CreateContextMenu(event: any) {
   // /#/fixed_menu 给url添加参数,image_path
   const urlWithParams = `/#/contextmenu?path=${image_path.value}&label=fixed`;
   console.log(urlWithParams)
-
 
   const options = {
     label: 'contextmenu',
@@ -120,61 +116,50 @@ async function CreateContextMenu(event: any) {
     hiddenTitle: true,
     skipTaskbar: true,
     decorations: false,
+    focus: false,
   };
-  
+
+  // const new_win =
   await win.createWin(options, {x: event.x, y: event.y});
-  isMenuOpen.value = true;
-  
-  // 添加全局鼠标移动监听
-  document.addEventListener('mousemove', handleMouseMove);
+  // await new_win.once('tauri://close-requested', () => {
+  //   console.log('关闭菜单窗口')
+  //   emit('close_menu')
+  // });
+  // await new_win.once('tauri://blur', () => {
+  //   console.log('菜单窗口失焦')
+  //   emit('close_menu')
+  // });
 }
 
-// 处理鼠标移动
-function handleMouseMove(event: MouseEvent) {
-  if (!isMenuOpen.value) return;
-  
-  // 检查鼠标是否在菜单区域外
-  const mouseX = event.screenX;
-  const mouseY = event.screenY;
-  
-  if (mouseX < menuBounds.x || 
-      mouseX > menuBounds.x + menuBounds.width || 
-      mouseY < menuBounds.y || 
-      mouseY > menuBounds.y + menuBounds.height) {
-    closeWin();
-  }
-}
+// 监听右键点击事件启动菜单,启动后任何点击事件都会关闭菜单
+// 关闭菜单的处理函数
+const handleCloseMenu = () => {
+  emit('close_menu')
+};
 
-// 关闭窗口
-async function closeWin() {
-  await win.closeWin('contextmenu');
-  isMenuOpen.value = false;
-  // 移除鼠标移动监听
-  document.removeEventListener('mousemove', handleMouseMove);
-}
-
-// 右键点击事件处理器
-
-// 在组件挂载时添加事件监听器
+// 监听全局事件
 onMounted(() => {
+  // 监听右键菜单事件
   document.addEventListener('contextmenu', CreateContextMenu);
+  // 监听点击事件关闭菜单
+  document.addEventListener('click', handleCloseMenu);
+  // 监听窗口失焦事件关闭菜单
+  window.addEventListener('blur', handleCloseMenu);
+  // 监听按下 Esc 键关闭菜单
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      handleCloseMenu();
+    }
+  });
 });
 
-// 在组件卸载时移除事件监听器
+// 清理所有事件监听
 onUnmounted(() => {
   document.removeEventListener('contextmenu', CreateContextMenu);
-  document.removeEventListener('mousemove', handleMouseMove);
-  // 如果菜单还开着，确保关闭
-  if (isMenuOpen.value) {
-    closeWin();
-  }
+  document.removeEventListener('click', handleCloseMenu);
+  window.removeEventListener('blur', handleCloseMenu);
+  document.removeEventListener('keydown', handleCloseMenu);
 });
-
-// OCR
-// listen("OCRImage", async (event) => {
-//   image_path.value = event.payload
-//   console.log(event.payload)
-// });
 
 </script>
 
@@ -185,11 +170,11 @@ onUnmounted(() => {
       <div class="image-container">
         <img :src="path" alt="Screenshot" class="screenshot-image"/>
         <div class="ocr-overlay">
-          <div 
-            v-for="(item, index) in image_ocr?.data" 
-            :key="index"
-            class="ocr-text"
-            :style="{
+          <div
+              v-for="(item, index) in image_ocr?.data"
+              :key="index"
+              class="ocr-text"
+              :style="{
               position: 'absolute',
               left: `${Math.round(item.box[0][0])}px`,
               top: `${Math.round(item.box[0][1])}px`,

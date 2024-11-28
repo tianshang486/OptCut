@@ -2,7 +2,7 @@ import {createRouter, createWebHashHistory} from 'vue-router'
 import screenshot from "@/views/screenshot.vue"
 import home from "@/views/home.vue"
 import fixed from "@/views/fixed.vue"
-import Contextmenu from "@/views/contextmenu.vue"
+import Contextmenu from "@/components/contextmenu.vue"
 
 const routes: Array<any> = [
     {

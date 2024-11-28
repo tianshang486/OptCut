@@ -1,7 +1,7 @@
 <template>
   <div class="v3-context-menu">
-    <div class="v3-context-menu-item" 
-         v-for="item in menuItems" 
+    <div class="v3-context-menu-item"
+         v-for="item in menuItems"
          :key="item.label"
          @click="handleSelect(item.label)">
       <i v-if="item.icon" class="menu-icon">{{ item.icon }}</i>
@@ -11,13 +11,16 @@
 </template>
 
 <script setup lang="ts">
-import {ref} from 'vue'
+import {onMounted, ref} from 'vue'
 import {writeImage} from "@tauri-apps/plugin-clipboard-manager";
 import {Image} from "@tauri-apps/api/image";
 import {Windows,} from '@/windows/create'
-import {emit} from "@tauri-apps/api/event";
-
-const windows = new Windows()
+import {emit, listen} from "@tauri-apps/api/event";
+// 禁用默认右键菜单
+document.addEventListener('contextmenu', (event) => {
+  event.preventDefault();
+});
+const NewWindows = new Windows()
 // 从url中获取截图路径和label /#/fixed_menu?path=xxx&label=xxx
 const hash = window.location.hash // 获取 #/fixed_menu?path=xxx&label=xxx
 const params = new URLSearchParams(hash.split('?')[1]) // 分割获取参数部分
@@ -27,21 +30,68 @@ const label: any = ref(params.get('label'))
 // const image_ocr: any = ref([])
 // const activeIndex = ref('1')
 const menuItems = [
-  { label: '复制', icon: '📋', handler: () => copyImage(image_path.value) },
-  { label: '复制关闭', icon: '✂️', handler: () => copyAndClose(image_path.value) },
-  { label: 'OCR', icon: '👁️', handler: async () => {
-    const img = await readFileImage(image_path.value)
-    ocr(img)
-  }},
+  {
+    label: '复制', icon: '📋', handler: () => {
+      copyImage(image_path.value).then(() => {
+        NewWindows.closeWin(label.value)
+
+      })
+    }
+  },
+  {label: '复制关闭', icon: '✂️', handler: () => copyAndClose(image_path.value)},
+  {
+    label: 'OCR', icon: '👁️', handler: async () => {
+      const img = await readFileImage(image_path.value)
+      ocr(img)
+    }
+  },
+  {
+    label: '关闭窗口', icon: '❌', handler: async () => {
+      await NewWindows.closeWin(label.value);
+      await NewWindows.closeWin('contextmenu');
+    }
+  },
 ]
 
 async function readFileImage(path: string) {
   return await Image.fromPath(path)
 }
+
 // 文字识别
 function ocr(img: any) {
   emit('ocrImage', img)
 }
+
+// 监听关闭窗口事件
+listen('close_menu', async () => {
+  console.log('监听到关闭窗口事件')
+  // await NewWindows.closeWin(label.value)
+  //   延迟1秒关闭窗口
+  setTimeout(async () => {
+    await NewWindows.closeWin('contextmenu')
+    console.log('关闭窗口')
+  }, 100)
+})
+
+// 使用getWin 获取父窗口是否存在,不存在则关闭子窗口
+// 持续检查父窗口是否存在
+onMounted(() => {
+  const checkParentWindow = setInterval(async () => {
+    try {
+      const win = await NewWindows.getWin(label.value);
+      if (!win) {
+        clearInterval(checkParentWindow);
+        await NewWindows.closeWin(label.value);
+        await NewWindows.closeWin('contextmenu');
+      }
+    } catch (error) {
+      clearInterval(checkParentWindow);
+      await NewWindows.closeWin(label.value);
+      await NewWindows.closeWin('contextmenu');
+    }
+  }, 1000); // 每秒检查一次
+});
+
 
 // 复制图片到剪贴板
 const copyImage = async (path: string) => {
@@ -63,8 +113,8 @@ const copyImage = async (path: string) => {
 // 复制并关闭窗口
 const copyAndClose = async (path: string) => {
   await copyImage(path);
-  await windows.closeWin(label.value)
-  await windows.closeWin('contextmenu')
+  await NewWindows.closeWin(label.value)
+  await NewWindows.closeWin('contextmenu')
 };
 const handleSelect = (index: string) => {
   const item = menuItems.find(item => item.label === index)

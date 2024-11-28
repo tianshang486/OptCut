@@ -4,7 +4,6 @@ import {copyImage,} from '@/windows/method'
 import {onMounted, onUnmounted, ref, computed} from "vue";
 import {PhysicalPosition} from '@tauri-apps/api/window';
 import {convertFileSrc, invoke} from "@tauri-apps/api/core";
-import {emitTo} from "@tauri-apps/api/event";
 // 从url中获取截图路径?path=' + result.path,
 const url: any = window.location.hash.slice(window.location.hash.indexOf('?') + 1);
 const path: any = new URLSearchParams(url).get('path')
@@ -13,26 +12,19 @@ console.log('截图路径', path)
 const win: any = new Windows()
 
 let isMouseDown = false;
-let lastRightClickTime = 0; // 记录上一次右键点击的时间
 
+// 右键单击关闭事件处理
 const handleContextMenu = async (e: MouseEvent) => {
-  e.preventDefault(); // 阻止默认的右键菜单
-  if (e.button === 2) { // 2 表示右键点击
-    const currentTime = Date.now(); // 获取当前时间
-    if (currentTime - lastRightClickTime < 400) { // 如果两次点击时间间隔小于400毫秒，则认为是双击
-      console.log('关闭截图窗口');
-      await win.closeWin('screenshot');
-      document.removeEventListener('contextmenu', handleContextMenu); // 移除事件监听
-    } else {
-      // 如果不是双击，记录这次点击的时间
-      lastRightClickTime = currentTime;
-    }
+  e.preventDefault(); // 阻止默认右键菜单
+//   如果是右键单击，关闭窗口
+  if (e.button === 2) {
+    await win.closeWin('screenshot')
   }
+
 };
 
-document.addEventListener('contextmenu', handleContextMenu); // 监听右键点击
-
 document.addEventListener('contextmenu', handleContextMenu); // 监听右键点击事件
+
 // 添加必要的响应式变量
 const isDragging = ref(false)
 const startPos = ref({x: 0, y: 0})
@@ -65,6 +57,9 @@ let selectionStyle: any = computed(() => {
 const mousePos = ref({ x: 0, y: 0 });
 const currentColor = ref('#000000')
 
+// 添加双击检测变量
+const lastClickTime = ref(0);
+const doubleClickDelay = 300; // 双击间隔时间（毫秒）
 
 // 节流函数，限制执行频率
 const throttle = (fn: Function, delay: number) => {
@@ -170,7 +165,7 @@ interface ScreenshotResult {
 async function handleCopyImage() {
   try {
     console.log('开始复制图片')
-    await copyImage(path.replace('http://asset.localhost/', ''))
+    // await copyImage(path.replace('http://asset.localhost/', ''))
     // const transformedImage: any = transformImage(result);
     // // 写入剪切板
     // await writeImage(transformedImage);
@@ -184,11 +179,33 @@ async function handleCopyImage() {
   }
 }
 
-// 在 handleMouseUp 中重置
+// 修改鼠标抬起事件处理
 const handleMouseUp = async (e: MouseEvent) => {
   if (!isMouseDown) return;
+  
+  // 如果是右键，直接返回，不执行任何截图操作
+  if (e.button === 2) {
+    isMouseDown = false;
+    return;
+  }
+
   e.preventDefault();
   isDragging.value = false;
+  
+  // 检测双击
+  const currentTime = new Date().getTime();
+  const timeDiff = currentTime - lastClickTime.value;
+  
+  if (e.button === 0 && timeDiff < doubleClickDelay) {
+    await copyImage(path.replace('http://asset.localhost/', ''))
+    console.log('触发双击全屏截图');
+    isMouseDown = false;
+    lastClickTime.value = 0; // 重置点击时间
+    return;
+  }
+  
+  lastClickTime.value = currentTime;
+  
   selectionStyle.value = {
     width: '0px',
     height: '0px',
@@ -199,7 +216,7 @@ const handleMouseUp = async (e: MouseEvent) => {
       e.screenX,
       e.screenY
   )
-  console.log('鼠标位置结束', mouseDownPos.value.x, mouseDownPos.value.y);
+  console.log('鼠标位置结束', mouseUpPos.value.x, mouseUpPos.value.y);
   let width = Math.abs(Math.abs(mouseUpPos.value.x) - Math.abs(mouseDownPos.value.x));
   let height = Math.abs(Math.abs(mouseUpPos.value.y) - Math.abs(mouseDownPos.value.y));
   // 判断起始点和结束点,绝对值更小的为坐标轴的方向
@@ -207,10 +224,11 @@ const handleMouseUp = async (e: MouseEvent) => {
   let y = Math.min(mouseUpPos.value.y, mouseDownPos.value.y);
   isMouseDown = false;
 
-  // 如果鼠标位置结束和开始相差2px以内视为截图全屏
-  if (width > 2 || height > 2) {
-    console.log('截图全屏');
-    // 根据鼠标移动两个点的坐标获取图片的截图坐标
+  // 只在左键点击且移动距离小于2px时执行全屏截图
+  if (width <= 2 && height <= 2) {
+    console.log('误操作忽律');
+  } else if (e.button === 0) { // 只在左键点击时执行区域截图
+    console.log('截图区域');
     const result: ScreenshotResult = JSON.parse(await invoke('capture_screen_fixed', {
       x: x,
       y: y,
@@ -233,19 +251,14 @@ const handleMouseUp = async (e: MouseEvent) => {
       resizable: true,
       fullscreen: false,
       maximized: false,
-      transparent: false,
+      transparent: true,
       center: false,
       decorations: true,
+      focus: false
     };
     console.log('创建窗口', windowOptions)
     await win_fixed.createWin(windowOptions, result.path);
-    await emitTo('fixed', 'OCRImage', result.path)
     await win.closeWin('screenshot');
-  } else {
-
-    console.log('截图全屏');
-
-
   }
 }
 
@@ -284,7 +297,7 @@ const selectionHeight = computed(() => {
 </script>
 <template>
   <div class="screenshot-container" @mousemove="handleGlobalMouseMove">
-    <img :src="path" alt="Screenshot" class="screenshot-image" @click="handleCopyImage" />
+    <img :src="path" alt="Screenshot" class="screenshot-image" />
     <div class="selection-box" :style="selectionStyle"></div>
     <div class="overlay" :style="overlayStyle"></div>
     <div class="coordinates-info" v-if="isDragging" 

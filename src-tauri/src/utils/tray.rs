@@ -6,9 +6,11 @@ pub fn create_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
     let hide_i = MenuItem::with_id(app, "hide", "最小化", true, None::<&str>)?;
     let edit_i = MenuItem::with_id(app, "edit_file", "测试点击", true, None::<&str>)?;
     let screenshots_i = MenuItem::with_id(app, "screenshots", "截图", true, None::<&str>)?;
+    // 关闭所有截图窗口
+    let close_all_i = MenuItem::with_id(app, "close_all_screenshots", "关闭所有截图窗口", true, None::<&str>)?;
     let a = Submenu::with_id_and_items(app, "File", "文章", true, &[&screenshots_i, &edit_i])?;
     // 分割线
-    let menu = Menu::with_items(app, &[&quit_i, &show_i, &hide_i, &screenshots_i])?;
+    let menu = Menu::with_items(app, &[ &show_i, &hide_i, &screenshots_i, &close_all_i, &a,&quit_i,])?;
 
     let _ = TrayIconBuilder::with_id("tray")
         .icon(app.default_window_icon().unwrap().clone())
@@ -34,6 +36,10 @@ pub fn create_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
             "screenshots" => {
                 //  给前端发送截图请求
                 app.emit("screenshots", "").expect("TODO: panic message");
+            }
+            "close_all_screenshots" => {
+                //  给前端发送关闭所有截图窗口请求
+                app.emit("close_all_screenshots", "").expect("TODO: panic message");
             }
             // Add more events here
             _ => {}
