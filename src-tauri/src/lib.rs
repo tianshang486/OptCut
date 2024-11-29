@@ -1,7 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-mod config;
 mod utils;
-use config::Config;
+use utils::config::Config;
 use image::{open};
 use mouse_position::mouse_position::Mouse;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -12,10 +11,12 @@ use std::io::Read;
 use std::os::windows::process::CommandExt;
 use std::process::Command;
 use tauri::Manager;
+use tauri::utils::config::parse::ConfigError;
 use xcap::{image, Monitor};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind, MessageDialogButtons};
 use utils::tray;
 use crate::utils::color;
+use utils::read_conf::read_conf;
 
 // fn greet(image_path: &str) {
 //     // 根据传入的 img_path 创建完整的命令
@@ -111,7 +112,7 @@ fn get_color_at(x: i32, y: i32) -> Result<String, String> {
 }
 
 #[tauri::command(rename_all = "snake_case")]
-fn ps_ocr(image_path: &str) -> Result<String, String> {
+async  fn ps_ocr(image_path: &str) -> Result<String, String> {
     println!("image_path: {},开始OCR识别", image_path);
 
     // 根据平台选择正确的可执行文件路径
@@ -159,17 +160,8 @@ fn ps_ocr(image_path: &str) -> Result<String, String> {
     Ok(result.to_string())
 }
 
-fn use_config(config: &Config) {
-    println!("Database server: {}", config.database.server);
-    println!("Server port: {}", config.server.port);
-}
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config_str = std::fs::read_to_string("config.toml")?;
-    let config: Config = toml::from_str(&config_str)?;
-
-    use_config(&config);
-
+fn main() -> Result<(), Box<dyn Error>> {
+    println!("Hello, world!");
     Ok(())
 }
 
@@ -289,4 +281,11 @@ fn delete_temp_file() {
             std::fs::remove_file(path).unwrap();
         }
     }
+}
+
+// 读取配置文件
+#[tauri::command(rename_all = "snake_case")]
+pub async fn read_conf_file() -> Result<serde_json::Value, ConfigError> {
+    print!("读取配置文件");
+    OK(read_conf().await)
 }

@@ -162,23 +162,6 @@ interface ScreenshotResult {
   window_y: number;
 }
 
-async function handleCopyImage() {
-  try {
-    console.log('开始复制图片')
-    // await copyImage(path.replace('http://asset.localhost/', ''))
-    // const transformedImage: any = transformImage(result);
-    // // 写入剪切板
-    // await writeImage(transformedImage);
-    // js将url图片写到剪切板
-    // const imgUrl = convertFileSrc(transformedImage);
-    // await win.closeWin('screenshot');
-  } catch (e) {
-    console.error(e, '图片转换失败')
-    // await win.closeWin('screenshot');
-    return
-  }
-}
-
 // 修改鼠标抬起事件处理
 const handleMouseUp = async (e: MouseEvent) => {
   if (!isMouseDown) return;
