@@ -1,18 +1,18 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "tauriDemo",
+  "productName": "OptCut",
   "version": "0.1.0",
-  "identifier": "com.Demo.app",
+  "identifier": "com.OptCut.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build --release",
+    "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
-        "title": "tauriDemo",
+        "title": "OptCut",
         "width": 800,
         "height": 600,
         "visible": false,
@@ -47,6 +47,13 @@
     "resources": [
       "tools/**/*"
     ]
+  },
+  "plugins": {
+    "sql": {
+      "preload": [
+        "sqlite:OptCut.db"
+      ]
+    }
   }
 }
 

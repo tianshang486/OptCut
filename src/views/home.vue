@@ -4,11 +4,10 @@ import {open} from '@tauri-apps/plugin-dialog';
 import {captureScreenshot} from '@/windows/screenshot.ts'
 import {tray_close} from '@/windows/tray.ts'
 import {ref} from "vue";
+import {globalState} from "@/windows/globalVariables.ts";
 
 const image_path = ref("");
-
 const greetMsg = ref("");
-
 
 // Open a dialog
 async function openDialog() {
@@ -30,13 +29,30 @@ async function removeImg() {
   await invoke("delete_temp_file",);
 }
 
+// 弹窗提升配置文件
+async function read_conf_file() {
+  try {
+    const result = await invoke('read_config');
+    console.log('Config result:', result);
+  } catch (error) {
+    console.error('Error reading config:', error);
+  }
+}
+
+// 修改打印函数
+const logWindowPool = () => {
+    console.log('当前窗口池:', globalState.windowPool);
+};
+
 </script>
 
 <template>
-  <button @click="captureScreenshot">Capture Screenshot</button>
+  <button @click="() => captureScreenshot()">Capture Screenshot</button>
   <button type="button" @click="openDialog">Open Dialog</button>
   <button type="button" @click="removeImg">Remove Img</button>
   <button type="button" @click="() => tray_close()">Close Tray</button>
+  <button type="button" @click="() => read_conf_file()">test Config</button>
+  <button type="button" @click="logWindowPool">查看窗口池</button>
   <img v-if="imgurl" :src="imgurl" class="fixed top-0 left-0 w-full select-none" alt=""/>
 </template>
 

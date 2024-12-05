@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { provide } from 'vue'
+import { globalState } from './windows/globalVariables'
 
-
+// 提供全局状态
+provide('globalState', globalState)
 </script>
 
 <template>
@@ -30,8 +33,6 @@
   <!--  </main>-->
 
 </template>
-
-
 <style>
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
@@ -40,7 +41,7 @@
   font-weight: 400;
 
   color: #0f0f0f;
-  background-color: #f6f6f6;
+  background-color: transparent;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -153,3 +154,4 @@ button {
   flex: 1 !important; /* 添加flex属性以填充剩余空间 */
 }
 </style>
+

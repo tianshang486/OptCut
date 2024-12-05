@@ -1,14 +1,32 @@
 <script setup lang="ts">
 import {Windows,} from '@/windows/create'
 import {copyImage,} from '@/windows/method'
-import {onMounted, onUnmounted, ref, computed} from "vue";
+import {onMounted, onUnmounted, ref, computed, inject,} from "vue";
 import {PhysicalPosition} from '@tauri-apps/api/window';
 import {convertFileSrc, invoke} from "@tauri-apps/api/core";
-// 从url中获取截图路径?path=' + result.path,
-const url: any = window.location.hash.slice(window.location.hash.indexOf('?') + 1);
-const path: any = new URLSearchParams(url).get('path')
-console.log('截图路径', path)
+import {globalState} from '@/windows/globalVariables'
+import {emit} from '@tauri-apps/api/event';
+const state: any = ref(inject('globalState', globalState))
 
+// 从url中获取截图路径?path=' + result.path,
+const urlParams = new URLSearchParams(window.location.hash.substring(window.location.hash.indexOf('?') + 1));
+const path: any = urlParams.get('path');
+const operationalID = urlParams.get('operationalID');
+console.log('截图路径', path)
+// 注入全局窗口池
+
+
+// 删除窗口的函数
+const removeWindowFromPool = (windowName: string) => {
+  globalState.windowPool = globalState.windowPool.filter((name: string) => name !== windowName)
+  console.log('窗口已删除:', globalState.windowPool)
+}
+
+// 增加窗口到窗口池
+const addWindowToPool = (windowName: string) => {
+  globalState.windowPool.push(windowName)
+  console.log('窗口已添加:', globalState.windowPool)
+}
 const win: any = new Windows()
 
 let isMouseDown = false;
@@ -54,7 +72,7 @@ let selectionStyle: any = computed(() => {
     border: '1px solid #1e90ff'
   }
 })
-const mousePos = ref({ x: 0, y: 0 });
+const mousePos = ref({x: 0, y: 0});
 const currentColor = ref('#000000')
 
 // 添加双击检测变量
@@ -76,7 +94,7 @@ const throttle = (fn: Function, delay: number) => {
 // 获取颜色的函数
 const updateColor = async (x: number, y: number) => {
   try {
-    currentColor.value = await invoke('get_color_at', { x, y })
+    currentColor.value = await invoke('get_color_at', {x, y})
   } catch (error) {
     console.error('获取颜色失败:', error)
   }
@@ -118,7 +136,7 @@ const handleMouseDown = (e: MouseEvent) => {
 const handleMouseMove = async (e: MouseEvent) => {
   if (!isDragging.value) return;
   e.preventDefault();
-  
+
   // 更新当前位置
   currentPos.value = {
     x: Math.round(e.clientX), // 取整以避免小数点导致的抖动
@@ -165,7 +183,7 @@ interface ScreenshotResult {
 // 修改鼠标抬起事件处理
 const handleMouseUp = async (e: MouseEvent) => {
   if (!isMouseDown) return;
-  
+
   // 如果是右键，直接返回，不执行任何截图操作
   if (e.button === 2) {
     isMouseDown = false;
@@ -174,11 +192,11 @@ const handleMouseUp = async (e: MouseEvent) => {
 
   e.preventDefault();
   isDragging.value = false;
-  
+
   // 检测双击
   const currentTime = new Date().getTime();
   const timeDiff = currentTime - lastClickTime.value;
-  
+
   if (e.button === 0 && timeDiff < doubleClickDelay) {
     await copyImage(path.replace('http://asset.localhost/', ''))
     console.log('触发双击全屏截图');
@@ -186,9 +204,9 @@ const handleMouseUp = async (e: MouseEvent) => {
     lastClickTime.value = 0; // 重置点击时间
     return;
   }
-  
+
   lastClickTime.value = currentTime;
-  
+
   selectionStyle.value = {
     width: '0px',
     height: '0px',
@@ -219,29 +237,48 @@ const handleMouseUp = async (e: MouseEvent) => {
       height: height,
     }));
     const imgUrl = convertFileSrc(result.path);
+    // 刷新窗口池
+
     const win_fixed = new Windows();
-    const url = `/#/fixed?path=${imgUrl}`;
-    console.log('窗口大小', width, height, '窗口位置', x, y, '图片路径', result.path)
-    // 计算窗口位置
-    const windowOptions = {
-      label: 'fixed',
-      title: 'fixed',
-      url: url,
-      width: width,
-      height: height,
-      x: x - 8,
-      y: y - 32,
-      resizable: true,
-      fullscreen: false,
-      maximized: false,
-      transparent: true,
-      center: false,
-      decorations: true,
-      focus: false
-    };
-    console.log('创建窗口', windowOptions)
-    await win_fixed.createWin(windowOptions, result.path);
-    await win.closeWin('screenshot');
+    // 注入全局状态
+
+    console.log(state.value.windowPool, '窗口池')
+    const fixed_label = state.value.windowPool[0]  // 获取第一个窗口
+    if (fixed_label) {
+      removeWindowFromPool(fixed_label)
+      console.log('窗口池', state.value.windowPool)
+      // 通知发生修改
+      await emit('windowPoolChanged', state.value.windowPool)
+      const url = `/#/fixed?path=${imgUrl}&operationalID=${operationalID}&label=${fixed_label}`;
+      console.log('窗口大小', width, height, '窗口位置', x, y, '图片路径', result.path)
+      // 计算窗口位置
+      const windowOptions = {
+        label: fixed_label,
+        title: 'fixed',
+        url: url,
+        width: width,
+        height: height,
+        x: x - 8,
+        y: y - 32,
+        resizable: true,
+        fullscreen: false,
+        maximized: false,
+        transparent: true,
+        center: false,
+        decorations: true,
+        focus: false
+      };
+      console.log('创建窗口', windowOptions)
+      await win_fixed.createWin(windowOptions, result.path);
+      // 发送全局事件，通知创建了新的固定窗口
+      await emit('fixed_window_created', {
+        label: fixed_label
+      });
+      // 关闭当前窗口
+      await win.closeWin('screenshot')
+    }
+  } else { // 其他情况忽略
+    alert('浮窗数量已达到上限，请关闭部分窗口后再试')
   }
 }
 
@@ -280,10 +317,10 @@ const selectionHeight = computed(() => {
 </script>
 <template>
   <div class="screenshot-container" @mousemove="handleGlobalMouseMove">
-    <img :src="path" alt="Screenshot" class="screenshot-image" />
+    <img :src="path" alt="Screenshot" class="screenshot-image"/>
     <div class="selection-box" :style="selectionStyle"></div>
     <div class="overlay" :style="overlayStyle"></div>
-    <div class="coordinates-info" v-if="isDragging" 
+    <div class="coordinates-info" v-if="isDragging"
          :style="{ 
            left: startPos.x + 'px', 
            top: (startPos.y - 45) + 'px',
@@ -300,6 +337,13 @@ const selectionHeight = computed(() => {
 </template>
 
 <style scoped>
+:root {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+
 .screenshot-container {
   position: fixed;
   top: 0;

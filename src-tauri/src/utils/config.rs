@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize,Serialize, Clone)]
 pub struct Config {
     pub database: Database,
     pub server: Server,
@@ -34,7 +34,7 @@ pub struct ShortcutKey {
 lazy_static! {
     pub static ref CONFIG: Arc<Config> = {
         let config_str =
-            std::fs::read_to_string("assets/Config.toml").expect("Failed to read config file");
-        toml::from_str(&config_str).expect("Failed to parse config file")
+            std::fs::read_to_string("assets/Config.json").expect("Failed to read config file");
+        serde_json::from_str(&config_str).expect("Failed to parse config file")
     };
 }

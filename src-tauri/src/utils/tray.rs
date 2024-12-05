@@ -59,7 +59,9 @@ pub fn create_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
             }
         })
         .build(app);
-
+    println!("Emitting shortcut_key event");
+    app.emit("shortcut_key", "").expect("Failed to emit shortcut_key event");
+    println!("Tray icon created");
     Ok(())
 }
 

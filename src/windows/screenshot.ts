@@ -1,4 +1,3 @@
-
 import {convertFileSrc, invoke} from "@tauri-apps/api/core";
 import {Windows,} from '@/windows/create'
 
@@ -11,7 +10,7 @@ interface ScreenshotResult {
     window_y: number;
 }
 
-export async function captureScreenshot() {
+export async function captureScreenshot(operationalID: string = 'default') {
     console.log('开始截图')
     try {
         const result: ScreenshotResult = JSON.parse(await invoke('capture_screen_one'));
@@ -22,7 +21,7 @@ export async function captureScreenshot() {
 
         const imgUrl = convertFileSrc(result.path);
         const win = new Windows();
-        const url = `/#/screenshot?path=${imgUrl}`;
+        const url = `/#/screenshot?path=${imgUrl}&operationalID=${operationalID}`;
 
         const windowOptions = {
             label: 'screenshot',
@@ -31,6 +30,7 @@ export async function captureScreenshot() {
             width: result.width,
             height: result.height,
             fullscreen: true,
+            transparent: true,
             x: result.window_x,
             y: result.window_y,
         };

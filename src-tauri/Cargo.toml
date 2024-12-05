@@ -1,8 +1,8 @@
 [package]
-name = "tauriDemo"
+name = "OptCut"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "zxl-optcut"
+authors = ["zxl <<EMAIL>>"]
 edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -10,7 +10,7 @@ edition = "2021"
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "tauri_demo_lib"
+name = "OptCut_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -20,23 +20,28 @@ tauri-build = { version = "2", features = [] }
 lto = true
 strip = true  # 自动从二进制文件去除符号信息.
 panic = "abort"
+codegen-units = 1
+opt-level = 3      # 添加这行启用最高级别优化
 
+[profile.dev]
+opt-level = 0      # 开发时使用最快的编译速度
+debug = true       # 保留调试信息
 
 [dependencies]
-tauri = { version = "2.0.3", features = [ "tray-icon", "protocol-asset", "macos-private-api", "unstable", "image-png", "image-ico"] }
+tauri = { version = "2.0.3", features = ["tray-icon", "protocol-asset", "macos-private-api", "unstable", "image-png", "image-ico"] }
 tauri-plugin-shell = "2.0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-toml = "0.8.19"
 tauri-plugin-dialog = "2"
 dirs = "5.0.1"
-xcap="0.0.14"
+xcap = "0.0.14"
 lazy_static = "1.5.0"
 mouse_position = "0.1.4"
 tauri-plugin-fs = "2"
-image = "0.25.5"
+image = {version =  "0.25.5",default-features = false,features = ["png","gif"] }
 tauri-plugin-clipboard-manager = "2.0.2"
 base64 = "0.22.1"
+tauri-plugin-sql = { version = "2.0.0", features = ["sqlite"] }
 
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]

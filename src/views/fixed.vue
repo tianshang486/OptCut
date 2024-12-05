@@ -4,12 +4,20 @@ import {Windows,} from '@/windows/create'
 import {onMounted, onUnmounted, Ref, ref, UnwrapRef} from "vue";
 import {invoke} from "@tauri-apps/api/core";
 import {emit, listen} from "@tauri-apps/api/event";
+import {copyImage} from "@/windows/method.ts";
 
-
+const NewWindows = new Windows()
 // 从url中获取截图路径?path=' + result.path,
 const url: any = window.location.hash.slice(window.location.hash.indexOf('?') + 1);
 const path: any = new URLSearchParams(url).get('path')
-
+const operationalID: any = new URLSearchParams(url).get('operationalID')
+const label: any = new URLSearchParams(url).get('label')
+// 如果operationalID是fixed_copy则是直接复制图片到剪贴板,然后关闭窗口
+if (operationalID === 'fixed_copy') {
+  copyImage(path).then(() => {
+    NewWindows.closeWin(label)
+  })
+}
 
 // 从path路径http://asset.localhost/C:\Users\zxl\AppData\Local\Temp\AGCut_1731571102.png截取图片路径
 const image_path: any = ref(path.replace('http://asset.localhost/', ''))
@@ -24,12 +32,12 @@ const win = new Windows()
 // 调整窗口宽度
 
 function resize(width: number, height: number) {
-  win.resizeWin('fixed', {width: Math.floor(width), height: Math.floor(height)});
+  win.resizeWin(label, {width: Math.floor(width), height: Math.floor(height)});
 }
 
 // 获取窗口大小
 function getSize() {
-  return win.getWinSize('fixed')
+  return win.getWinSize(label)
 }
 
 const ocr = async () => {
@@ -92,7 +100,7 @@ async function CreateContextMenu(event: any) {
     height: 300
   };
   // /#/fixed_menu 给url添加参数,image_path
-  const urlWithParams = `/#/contextmenu?path=${image_path.value}&label=fixed`;
+  const urlWithParams = `/#/contextmenu?path=${image_path.value}&label=${label}`;
   console.log(urlWithParams)
 
   const options = {
@@ -119,16 +127,8 @@ async function CreateContextMenu(event: any) {
     focus: false,
   };
 
-  // const new_win =
-  await win.createWin(options, {x: event.x, y: event.y});
-  // await new_win.once('tauri://close-requested', () => {
-  //   console.log('关闭菜单窗口')
-  //   emit('close_menu')
-  // });
-  // await new_win.once('tauri://blur', () => {
-  //   console.log('菜单窗口失焦')
-  //   emit('close_menu')
-  // });
+  await  win.createWin(options, {x: event.x, y: event.y});
+
 }
 
 // 监听右键点击事件启动菜单,启动后任何点击事件都会关闭菜单

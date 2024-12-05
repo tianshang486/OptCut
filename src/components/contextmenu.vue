@@ -26,8 +26,7 @@ const hash = window.location.hash // 获取 #/fixed_menu?path=xxx&label=xxx
 const params = new URLSearchParams(hash.split('?')[1]) // 分割获取参数部分
 const image_path: any = ref(params.get('path'))
 const label: any = ref(params.get('label'))
-
-// const image_ocr: any = ref([])
+console.log(image_path.value, label.value,'父信息')// const image_ocr: any = ref([])
 // const activeIndex = ref('1')
 const menuItems = [
   {
@@ -85,6 +84,8 @@ onMounted(() => {
         await NewWindows.closeWin('contextmenu');
       }
     } catch (error) {
+      console.log(error)
+      alert(error);
       clearInterval(checkParentWindow);
       await NewWindows.closeWin(label.value);
       await NewWindows.closeWin('contextmenu');

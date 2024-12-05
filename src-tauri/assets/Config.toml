@@ -8,7 +8,7 @@ connection_max = 5000
 port = 8080
 ip = "10.0.0.1"
 
-[shortcutKey]
+[shortcut_key]
 screenshot_fixed = "Ctrl+Alt+W"
 screenshot_copy = "Ctrl+Alt+Q"
 screenshot_fixed_ocr = "Ctrl+Alt+E"

@@ -1,21 +1,87 @@
-import {isRegistered, register, ShortcutEvent} from '@tauri-apps/plugin-global-shortcut';
 import {captureScreenshot} from '@/windows/screenshot.ts'
 import {Windows} from '@/windows/create.ts'
-import {listen} from "@tauri-apps/api/event";
+import {emit, listen} from "@tauri-apps/api/event";
+import { globalState } from '@/windows/globalVariables';
+import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 
+// // 读取快捷键配置
+// async function readShortcutConfig() {
+//     const config = invoke('read_config')
+//     console.log(config)
+//     return config
+// }
+//
+// // 注销快捷键
+// async function unregisterShortcuts(shortcut_key: string) {
+//     if (await isRegistered(shortcut_key)) {
+//         await unregister(shortcut_key);
+//         console.log('快捷键已注销:', shortcut_key);
+//     }
+// }
 
-export async function registerShortcuts() {
-    // 注册快捷键，监听释放事件
-    if (!await isRegistered('Ctrl+Alt+W')) {
-        await register('Ctrl+Alt+W', async (event: ShortcutEvent) => {
-            if (event.state === "Pressed") {
-                console.log('Ctrl+Alt+W released', event);
-                await captureScreenshot();
-            }
-        });
+// 注册快捷键
+// async function registerShortcuts(shortcut_key: string, method: Function, controller: any = 'default') {
+//     try {
+//         // 如果已注册，先注销
+//         if (await isRegistered(shortcut_key)) {
+//             // await unregisterShortcuts(shortcut_key);
+//         } else {
+//
+//             // 重新注册快捷键，保持监听状态
+//             await register(shortcut_key, async (event: ShortcutEvent) => {
+//                 if (event.state === "Pressed") {
+//                     console.log('截图快捷键触发', shortcut_key);
+//                     try {
+//                         await method(controller);
+//                     } catch (error) {
+//                         console.error('执行快捷键功能时出错:', error);
+//                     }
+//                 }
+//             });
+//
+//             console.log('快捷键注册成功:', shortcut_key);
+//         }
+//     } catch (error) {
+//         console.error('注册快捷键失败:', error);
+//     }
+//
+// }
+
+// export async function registerShortcutsMain(controller: any = 'default') {
+//     try {
+//         const config = await JSON.parse(<string>await readShortcutConfig());
+//         console.log('读取到的快捷键配置:', config);
+//
+//         // 注册固定截图快捷键
+//         await registerShortcuts(
+//             config.shortcut_key.screenshot_fixed,
+//             captureScreenshot,
+//             'default'
+//         );
+//
+//         // 注册复制截图快捷键
+//         await registerShortcuts(
+//             config.shortcut_key.screenshot_copy,
+//             captureScreenshot,
+//             'fixed_copy'
+//         );
+//     } catch (error) {
+//         console.error('注册主快捷键失败:', error);
+//     }
+// }
+
+// 快捷键执行截图
+async function captureScreenshotMain(controller: any = 'default') {
+    if (controller === 'fixed_copy') {
+        await captureScreenshot('fixed_copy');
+    } else if (controller === 'default') {
+        await captureScreenshot('fixed_ocr');
+    } else if (controller === 'fixed_ocr') {
+        await captureScreenshot('default');
+    } else {
+        await captureScreenshot(controller);
     }
 }
-
 export async function listenShortcuts() {
     const windows = new Windows();
     await listen('screenshots', (event: any) => {
@@ -37,13 +103,67 @@ export async function listenShortcuts() {
                         console.error(`Failed to close window ${window.label}:`, err);
                     }
                 });
-            
+
             await Promise.all(closePromises);
             console.log('All fixed windows closed successfully');
         } catch (error) {
             console.error('Error closing windows:', error);
         }
     });
+
+    // 添加新的快捷键监听
+    await listen('shortcut_event', async (event: any) => {
+        console.log('快捷键事件触发', event.payload);
+        await captureScreenshotMain(event.payload);
+    });
 }
 
+export async function listenFixedWindows() {
+    console.log('开始监听固定窗口事件');
+    try {
+        await listen('fixed_window_created', async (event: any) => {
+            const { label } = event.payload;
+            console.log('收到固定窗口创建事件:', label);
+            try {
+                const win = await WebviewWindow.getByLabel(label);
 
+                if (win) {
+                    console.log('成功获取窗口实例:', label);
+                    try {
+                        // 使用 onCloseRequested 处理关闭事件
+                        const unlistenFn = await win.onCloseRequested(async () => {
+                            console.log('触发窗口关闭事件:', label);
+                            try {
+                                // 添加窗口标签回到窗口池
+                                if (!globalState.windowPool.includes(label)) {
+                                    globalState.windowPool.push(label);
+                                    console.log('添加标签到窗口池成功:', label);
+                                }
+                                await emit('windowPoolChanged', globalState.windowPool);
+                                console.log('窗口池更新完成, 当前窗口池:', globalState.windowPool);
+                            } catch (error) {
+                                console.error('处理窗口关闭事件时出错:', error);
+                            }
+                        });
+                        
+                        // 监听窗口销毁事件来清理监听器
+                        await win.once('tauri://destroyed', async () => {
+                            await unlistenFn();
+                        });
+                        
+                        console.log('关闭事件监听器设置完成:', label);
+                    } catch (error) {
+                        console.error('设置窗口关闭事件监听器时出错:', error);
+                    }
+                } else {
+                    console.error(`未能获取窗口实例: ${label}`);
+                }
+            } catch (error) {
+                console.error('处理固定窗口创建事件时出错:', error);
+            }
+        });
+        console.log('固定窗口事件监听器设置完成');
+    } catch (error) {
+        console.error('设置固定窗口事件监听器时出错:', error);
+    }
+}
