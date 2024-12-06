@@ -2,6 +2,7 @@
 mod utils;
 mod migrations;
 mod commands;
+
 use crate::commands::{
     capture_screen_fixed,
     capture_screen_one,
@@ -10,14 +11,9 @@ use crate::commands::{
     ps_ocr,
     read_config,
 };
-use serde::{Deserialize, Deserializer, Serialize};
-use std::env;
-use std::error::Error;
-use std::io::Read;
-use std::os::windows::process::CommandExt;
 use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
-use tauri_plugin_sql::{Builder};
+use tauri_plugin_sql::Builder;
 use utils::tray;
 // fn greet(image_path: &str) {
 //     // 根据传入的 img_path 创建完整的命令
@@ -87,21 +83,21 @@ pub fn run() {
                 let handle = app.handle();
                 tray::create_tray(handle)?;
                 println!("Tray created");
-                use tauri::Manager;
                 use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
 
                 handle.plugin(
                     tauri_plugin_global_shortcut::Builder::new()
                         .with_shortcuts(["ctrl+alt+q", "ctrl+alt+e"])?
                         .with_handler(|app, shortcut, event| {
-                            println!("Entering shortcut handler...");
-                            println!("Shortcut pressed: {:?}", shortcut);
-                            println!("Event state: {:?}", event.state);
                             if event.state == ShortcutState::Pressed {
                                 // 三个按键的组合: Ctrl+Alt+Shift+Q
                                 if shortcut.matches(Modifiers::CONTROL | Modifiers::ALT, Code::KeyQ) {
                                     let _ = app.emit("shortcut_event", "default");
                                     println!("ctrl+alt+q");
+                                }
+                                if shortcut.matches(Modifiers::CONTROL | Modifiers::ALT, Code::KeyW) {
+                                    let _ = app.emit("shortcut_event", "fixed_ocr");
+                                    println!("ctrl+alt+w");
                                 }
                                 // 两个按键的组合: Ctrl+Alt+E
                                 if shortcut.matches(Modifiers::CONTROL | Modifiers::ALT, Code::KeyE) {

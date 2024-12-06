@@ -1,9 +1,5 @@
 <script setup lang="ts">
-import { provide } from 'vue'
-import { globalState } from './windows/globalVariables'
 
-// 提供全局状态
-provide('globalState', globalState)
 </script>
 
 <template>
@@ -154,4 +150,3 @@ button {
   flex: 1 !important; /* 添加flex属性以填充剩余空间 */
 }
 </style>
-

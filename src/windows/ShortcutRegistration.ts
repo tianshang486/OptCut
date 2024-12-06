@@ -1,7 +1,7 @@
 import {captureScreenshot} from '@/windows/screenshot.ts'
 import {Windows} from '@/windows/create.ts'
-import {emit, listen} from "@tauri-apps/api/event";
-import { globalState } from '@/windows/globalVariables';
+import {listen} from "@tauri-apps/api/event";
+import {updateAuth} from '@/windows/dbsql'
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 
 // // 读取快捷键配置
@@ -121,7 +121,7 @@ export async function listenShortcuts() {
 export async function listenFixedWindows() {
     console.log('开始监听固定窗口事件');
     try {
-        await listen('fixed_window_created', async (event: any) => {
+        await listen('windowPoolChanged', async (event: any) => {
             const { label } = event.payload;
             console.log('收到固定窗口创建事件:', label);
             try {
@@ -135,12 +135,7 @@ export async function listenFixedWindows() {
                             console.log('触发窗口关闭事件:', label);
                             try {
                                 // 添加窗口标签回到窗口池
-                                if (!globalState.windowPool.includes(label)) {
-                                    globalState.windowPool.push(label);
-                                    console.log('添加标签到窗口池成功:', label);
-                                }
-                                await emit('windowPoolChanged', globalState.windowPool);
-                                console.log('窗口池更新完成, 当前窗口池:', globalState.windowPool);
+                                updateAuth('windowPool', {state: 0, windowName: label})
                             } catch (error) {
                                 console.error('处理窗口关闭事件时出错:', error);
                             }

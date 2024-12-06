@@ -1,53 +1,59 @@
 import Database from "@tauri-apps/plugin-sql";
 
+let db: Database | null = null;
 
-// 初始化数据库连接
-async function initDb() {
-    // sqlite数据库，路径相对于tauri::api::path::BaseDirectory::App
-    const db = await Database.load(
-        "sqlite:example.db"
-    );
-    return db;
+async function initDatabase() {
+    try {
+        db = await Database.load("sqlite:OptCut.db");
+        console.log('数据库连接成功');
+        return db;
+    } catch (error) {
+        console.error('数据库连接错误:', error);
+        throw error;
+    }
 }
 
-// 创建表
-export async function createAuthTable() {
-    const db = await initDb();
-    await db.execute(`
-    CREATE TABLE IF NOT EXISTS shortcutKey (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      shortcutKey TEXT NOT NULL,
-      function TEXT NOT NULL
-    )
-  `);
+
+// 查询数据
+export async function queryAuth(table: string, sql?: string) {
+    try {
+        if (!db) {
+            await initDatabase();
+        }
+
+        return await db!.select(sql || `SELECT * FROM ${table}`);
+    } catch (error) {
+        console.error('数据库查询错误:', error);
+        return []; 
+    }
 }
 
 // 插入数据
-export async function insertAuth(userId: string, scope: string) {
-    const db = await initDb();
-    await db.execute(`
-    INSERT INTO auth (userId, scope) VALUES (?, ?)
-  `, [userId, scope]);
-}
-
-// 查询数据
-export async function queryAuth() {
-    const db = await initDb();
-    return await db.select("SELECT * FROM auth");
+export async function insertAuth(table: string, data: {[key: string]: any}) {
+    if (!db) {
+        await initDatabase();
+    }
+    await db!.execute(`
+    INSERT INTO ${table} (${Object.keys(data).join(',')}) VALUES (${Object.values(data).join(',')})
+    `, [data]);
 }
 
 // 更新数据
-export async function updateAuth(id: number, userId: string, scope: string) {
-    const db = await initDb();
-    await db.execute(`
-    UPDATE auth SET userId = ?, scope = ? WHERE id = ?
-  `, [userId, scope, id]);
+export async function updateAuth(table: string, data: {[key: string]: any}) {
+    if (!db) {
+        await initDatabase();
+    }
+    await db!.execute(`
+    UPDATE ${table} SET ${Object.keys(data).join(',')} = ${Object.values(data).join(',')}
+    `, [data]);
 }
 
 // 删除数据
-export async function deleteAuth(id: number) {
-    const db = await initDb();
-    await db.execute(`
-    DELETE FROM auth WHERE id = ?
-  `, [id]);
+export async function deleteAuth(table: string, data: {[key: string]: any}) {
+    if (!db) {
+        await initDatabase();
+    }
+    await db!.execute(`
+    DELETE FROM ${table} WHERE ${Object.keys(data).join(',')} = ${Object.values(data).join(',')}
+    `, [data]);
 }

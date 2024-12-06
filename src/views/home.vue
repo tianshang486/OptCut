@@ -4,7 +4,7 @@ import {open} from '@tauri-apps/plugin-dialog';
 import {captureScreenshot} from '@/windows/screenshot.ts'
 import {tray_close} from '@/windows/tray.ts'
 import {ref} from "vue";
-import {globalState} from "@/windows/globalVariables.ts";
+import {queryAuth } from "@/windows/dbsql"
 
 const image_path = ref("");
 const greetMsg = ref("");
@@ -39,10 +39,11 @@ async function read_conf_file() {
   }
 }
 
-// 修改打印函数
+// 查看窗口池
 const logWindowPool = () => {
-    console.log('当前窗口池:', globalState.windowPool);
-};
+  const windowPool =   queryAuth('windowPool');
+  console.log(windowPool);
+}
 
 </script>
 

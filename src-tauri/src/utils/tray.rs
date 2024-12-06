@@ -52,7 +52,7 @@ pub fn create_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
             } = event
             {
                 let app = tray.app_handle();
-                if let Some(window) = app.get_webview_window("main") {
+                if let Some(_window) = app.get_webview_window("main") {
                     //  给前端发送截图请求
                     app.emit("screenshots", "").expect("TODO: panic message");
                 }

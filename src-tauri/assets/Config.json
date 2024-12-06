@@ -1,4 +1,7 @@
 {
+  "version": "0.1.0",
+  "name": "zy-opt-cut",
+  "description": "第一个软件",
   "database": {
     "server": "192.168.1.1",
     "ports": [8001, 8001, 8002],

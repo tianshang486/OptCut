@@ -1,32 +1,39 @@
 <script setup lang="ts">
 import {Windows,} from '@/windows/create'
 import {copyImage,} from '@/windows/method'
-import {onMounted, onUnmounted, ref, computed, inject,} from "vue";
+import {computed, onMounted, onUnmounted, ref} from "vue";
 import {PhysicalPosition} from '@tauri-apps/api/window';
 import {convertFileSrc, invoke} from "@tauri-apps/api/core";
-import {globalState} from '@/windows/globalVariables'
-import {emit} from '@tauri-apps/api/event';
-const state: any = ref(inject('globalState', globalState))
-
+import {queryAuth, updateAuth} from '@/windows/dbsql'
+import {emit} from "@tauri-apps/api/event";
 // 从url中获取截图路径?path=' + result.path,
 const urlParams = new URLSearchParams(window.location.hash.substring(window.location.hash.indexOf('?') + 1));
 const path: any = urlParams.get('path');
 const operationalID = urlParams.get('operationalID');
 console.log('截图路径', path)
-// 注入全局窗口池
-
-
-// 删除窗口的函数
+// 删除窗口的函数,将state设置为0
 const removeWindowFromPool = (windowName: string) => {
-  globalState.windowPool = globalState.windowPool.filter((name: string) => name !== windowName)
-  console.log('窗口已删除:', globalState.windowPool)
+  updateAuth('windowPool', {state: 1, windowName: windowName})
 }
 
-// 增加窗口到窗口池
-const addWindowToPool = (windowName: string) => {
-  globalState.windowPool.push(windowName)
-  console.log('窗口已添加:', globalState.windowPool)
-}
+// 读取窗口池中的窗口信息
+// 将异步操作移到 ref 中
+const windowPool = ref<any>([]);
+
+// 初始化函数
+const initWindowPool = async () => {
+  try {
+    windowPool.value = await queryAuth('windowPool', 'SELECT windowName FROM windowPool WHERE state = 0');
+    console.log('窗口池', windowPool.value);
+  } catch (error) {
+    console.error('查询窗口池失败:', error);
+    windowPool.value = [];
+  }
+};
+
+console.log('窗口池', windowPool)
+
+
 const win: any = new Windows()
 
 let isMouseDown = false;
@@ -229,7 +236,7 @@ const handleMouseUp = async (e: MouseEvent) => {
   if (width <= 2 && height <= 2) {
     console.log('误操作忽律');
   } else if (e.button === 0) { // 只在左键点击时执行区域截图
-    console.log('截图区域');
+    console.log('截图区域');windowPool
     const result: ScreenshotResult = JSON.parse(await invoke('capture_screen_fixed', {
       x: x,
       y: y,
@@ -241,14 +248,14 @@ const handleMouseUp = async (e: MouseEvent) => {
 
     const win_fixed = new Windows();
     // 注入全局状态
+    await initWindowPool();
 
-    console.log(state.value.windowPool, '窗口池')
-    const fixed_label = state.value.windowPool[0]  // 获取第一个窗口
+    const fixed_label = windowPool.value[0]?.windowName;  // 安全地获取第一个窗口名
     if (fixed_label) {
       removeWindowFromPool(fixed_label)
-      console.log('窗口池', state.value.windowPool)
+      console.log('窗口池选择', fixed_label)
       // 通知发生修改
-      await emit('windowPoolChanged', state.value.windowPool)
+      await emit('windowPoolChanged',fixed_label )
       const url = `/#/fixed?path=${imgUrl}&operationalID=${operationalID}&label=${fixed_label}`;
       console.log('窗口大小', width, height, '窗口位置', x, y, '图片路径', result.path)
       // 计算窗口位置
@@ -275,7 +282,7 @@ const handleMouseUp = async (e: MouseEvent) => {
         label: fixed_label
       });
       // 关闭当前窗口
-      await win.closeWin('screenshot')
+      // await win.closeWin('screenshot')
     }
   } else { // 其他情况忽略
     alert('浮窗数量已达到上限，请关闭部分窗口后再试')
@@ -321,8 +328,8 @@ const selectionHeight = computed(() => {
     <div class="selection-box" :style="selectionStyle"></div>
     <div class="overlay" :style="overlayStyle"></div>
     <div class="coordinates-info" v-if="isDragging"
-         :style="{ 
-           left: startPos.x + 'px', 
+         :style="{
+           left: startPos.x + 'px',
            top: (startPos.y - 45) + 'px',
            transform: startPos.y < 60 ? 'translateY(60px)' : 'none'
          }">

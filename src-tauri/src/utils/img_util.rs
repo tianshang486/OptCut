@@ -2,10 +2,9 @@
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use image::{self, GenericImageView};
-use image::{ExtendedColorType, ImageEncoder};
 use image::ImageReader;
-use std::io::{BufReader, BufWriter, Cursor};
+use image::{self};
+use std::io::Cursor;
 use std::path::Path;
 // 使用标准的 Base64 编码引擎
 

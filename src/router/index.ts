@@ -19,7 +19,6 @@ const routes: Array<any> = [
         path: '/fixed',
         name: 'Fixed',
         component: fixed
-        // route level code-splitting
     },
     {
         path: '/contextmenu',

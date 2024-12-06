@@ -2,7 +2,7 @@
 name = "OptCut"
 version = "0.1.0"
 description = "zxl-optcut"
-authors = ["zxl <<EMAIL>>"]
+authors = ["zxl <<15072720273@aliyun.com>>"]
 edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -12,6 +12,9 @@ edition = "2021"
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "OptCut_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[lints.rust]
+non_snake_case = "allow"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -38,11 +41,13 @@ xcap = "0.0.14"
 lazy_static = "1.5.0"
 mouse_position = "0.1.4"
 tauri-plugin-fs = "2"
-image = {version =  "0.25.5",default-features = false,features = ["png","gif"] }
+image = { version = "0.25.5", default-features = false, features = ["png", "gif"] }
 tauri-plugin-clipboard-manager = "2.0.2"
 base64 = "0.22.1"
-tauri-plugin-sql = { version = "2.0.0", features = ["sqlite"] }
 
+[dependencies.tauri-plugin-sql]
+features = ["sqlite"] # or "postgres", or "mysql"
+version = "2.0.2"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-global-shortcut = "2"
