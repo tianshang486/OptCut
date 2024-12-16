@@ -24,11 +24,11 @@ lto = true
 strip = true  # 自动从二进制文件去除符号信息.
 panic = "abort"
 codegen-units = 1
-opt-level = 3      # 添加这行启用最高级别优化
+opt-level = "s"
 
 [profile.dev]
-opt-level = 0      # 开发时使用最快的编译速度
-debug = true       # 保留调试信息
+opt-level = 3 # Prioritizes small binary size. Use `3` if you prefer speed.
+#debug = true       # 保留调试信息
 
 [dependencies]
 tauri = { version = "2.0.3", features = ["tray-icon", "protocol-asset", "macos-private-api", "unstable", "image-png", "image-ico"] }
@@ -37,11 +37,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-dialog = "2"
 dirs = "5.0.1"
-xcap = "0.0.14"
+xcap = "0.1.0"
 lazy_static = "1.5.0"
 mouse_position = "0.1.4"
 tauri-plugin-fs = "2"
-image = { version = "0.25.5", default-features = false, features = ["png", "gif"] }
+image = { version = "0.25.5" }
 tauri-plugin-clipboard-manager = "2.0.2"
 base64 = "0.22.1"
 

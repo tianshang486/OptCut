@@ -35,7 +35,7 @@
     "macOSPrivateApi": true
   },
   "bundle": {
-    "active": true,
+    "active": false,
     "targets": "all",
     "icon": [
       "icons/32x32.png",
