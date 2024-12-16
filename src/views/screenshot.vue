@@ -13,7 +13,7 @@ const operationalID = urlParams.get('operationalID');
 console.log('截图路径', path)
 // 删除窗口的函数,将state设置为0
 const removeWindowFromPool = (windowName: string) => {
-  updateAuth('windowPool', {state: 1, windowName: windowName})
+  updateAuth('windowPool', {state: 1, windowName: windowName}, {windowName: windowName})
 }
 
 // 读取窗口池中的窗口信息
@@ -254,14 +254,13 @@ const handleMouseUp = async (e: MouseEvent) => {
     if (fixed_label) {
       removeWindowFromPool(fixed_label)
       console.log('窗口池选择', fixed_label)
-      // 通知发生修改
-      await emit('windowPoolChanged',fixed_label )
+      
       const url = `/#/fixed?path=${imgUrl}&operationalID=${operationalID}&label=${fixed_label}`;
       console.log('窗口大小', width, height, '窗口位置', x, y, '图片路径', result.path)
-      // 计算窗口位置
+      
       const windowOptions = {
         label: fixed_label,
-        title: 'fixed',
+        title: fixed_label,
         url: url,
         width: width,
         height: height,
@@ -275,14 +274,19 @@ const handleMouseUp = async (e: MouseEvent) => {
         decorations: true,
         focus: false
       };
-      console.log('创建窗口', windowOptions)
+      
+      // 先创建窗口
       await win_fixed.createWin(windowOptions, result.path);
-      // 发送全局事件，通知创建了新的固定窗口
-      await emit('fixed_window_created', {
+      
+      // 等待窗口创建完成
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // 再发送事件
+      await emit('windowPoolChanged', {
         label: fixed_label
       });
       // 关闭当前窗口
-      // await win.closeWin('screenshot')
+      await win.closeWin('screenshot')
     }
   } else { // 其他情况忽略
     alert('浮窗数量已达到上限，请关闭部分窗口后再试')

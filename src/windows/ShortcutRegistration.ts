@@ -2,8 +2,8 @@ import {captureScreenshot} from '@/windows/screenshot.ts'
 import {Windows} from '@/windows/create.ts'
 import {listen} from "@tauri-apps/api/event";
 import {updateAuth} from '@/windows/dbsql'
-import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 
+const windows = new Windows();
 // // 读取快捷键配置
 // async function readShortcutConfig() {
 //     const config = invoke('read_config')
@@ -97,6 +97,11 @@ export async function listenShortcuts() {
                 .filter(window => window.label.startsWith('fixed'))
                 .map(async window => {
                     try {
+                        // 先调用 unlistenFn 解除事件监听
+                        const unlistenFn = await window.onCloseRequested(() => {});
+                        await unlistenFn();
+                        
+                        // 然后关闭窗口
                         await window.close();
                         console.log(`Closed window: ${window.label}`);
                     } catch (err) {
@@ -106,6 +111,9 @@ export async function listenShortcuts() {
 
             await Promise.all(closePromises);
             console.log('All fixed windows closed successfully');
+            
+            // 将库中所有窗口状态设置为0
+            await updateAuth('windowPool', {state: 0}, {1: 1});
         } catch (error) {
             console.error('Error closing windows:', error);
         }
@@ -125,8 +133,8 @@ export async function listenFixedWindows() {
             const { label } = event.payload;
             console.log('收到固定窗口创建事件:', label);
             try {
-                const win = await WebviewWindow.getByLabel(label);
-
+                const win = await windows.getWin(label)
+                console.log(win);
                 if (win) {
                     console.log('成功获取窗口实例:', label);
                     try {
@@ -135,17 +143,17 @@ export async function listenFixedWindows() {
                             console.log('触发窗口关闭事件:', label);
                             try {
                                 // 添加窗口标签回到窗口池
-                                updateAuth('windowPool', {state: 0, windowName: label})
+                                updateAuth('windowPool', {state: 0, windowName: label}, {windowName: label})
                             } catch (error) {
                                 console.error('处理窗口关闭事件时出错:', error);
                             }
                         });
-                        
+
                         // 监听窗口销毁事件来清理监听器
                         await win.once('tauri://destroyed', async () => {
                             await unlistenFn();
                         });
-                        
+
                         console.log('关闭事件监听器设置完成:', label);
                     } catch (error) {
                         console.error('设置窗口关闭事件监听器时出错:', error);

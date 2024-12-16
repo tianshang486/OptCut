@@ -40,7 +40,7 @@ export default defineConfig(async (): Promise<any> => ({
             "@@": path.resolve(__dirname, "src-tauri")
         }
     },
-    // esbuild: {
-    //     drop: ["console", "debugger"]
-    // }
+    esbuild: {
+        drop: ["console", "debugger"]
+    }
 }));

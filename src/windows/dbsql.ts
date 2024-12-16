@@ -30,30 +30,48 @@ export async function queryAuth(table: string, sql?: string) {
 
 // 插入数据
 export async function insertAuth(table: string, data: {[key: string]: any}) {
+    if (!table || !data || Object.keys(data).length === 0) {
+        throw new Error('表名和数据不能为空');
+    }
+    
     if (!db) {
         await initDatabase();
     }
+    const placeholders = Object.keys(data).map(() => '?').join(',');
     await db!.execute(`
-    INSERT INTO ${table} (${Object.keys(data).join(',')}) VALUES (${Object.values(data).join(',')})
-    `, [data]);
+    INSERT INTO ${table} (${Object.keys(data).join(',')}) 
+    VALUES (${placeholders})
+    `, Object.values(data));
 }
 
 // 更新数据
-export async function updateAuth(table: string, data: {[key: string]: any}) {
+export async function updateAuth(table: string, data: {[key: string]: any}, where: {[key: string]: any }) {
+    if (!table || !data || !where || Object.keys(data).length === 0 || Object.keys(where).length === 0) {
+        throw new Error('表名、更新数据和条件不能为空');
+    }
+
     if (!db) {
         await initDatabase();
     }
-    await db!.execute(`
-    UPDATE ${table} SET ${Object.keys(data).join(',')} = ${Object.values(data).join(',')}
-    `, [data]);
+    const setClause = Object.keys(data).map(key => `${key} = ?`).join(',');
+    const whereClause = Object.keys(where).map(key => `${key} = ?`).join(' AND ')
+    const sql = `UPDATE ${table} SET ${setClause} WHERE ${whereClause}`;
+    console.log(sql, [...Object.values(data),...Object.values(where)])
+    await db!.execute( sql, [...Object.values(data),...Object.values(where)]);
 }
 
 // 删除数据
-export async function deleteAuth(table: string, data: {[key: string]: any}) {
+export async function deleteAuth(table: string, where: {[key: string]: any}) {
+    if (!table || !where || Object.keys(where).length === 0) {
+        throw new Error('表名和删除条件不能为空');
+    }
+
     if (!db) {
         await initDatabase();
     }
+    const whereClause = Object.keys(where).map(key => `${key} = ?`).join(' AND ');
     await db!.execute(`
-    DELETE FROM ${table} WHERE ${Object.keys(data).join(',')} = ${Object.values(data).join(',')}
-    `, [data]);
+    DELETE FROM ${table} 
+    WHERE ${whereClause}
+    `, Object.values(where));
 }
