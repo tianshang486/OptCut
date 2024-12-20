@@ -97,11 +97,10 @@ export async function listenShortcuts() {
                 .filter(window => window.label.startsWith('fixed'))
                 .map(async window => {
                     try {
-                        // 先调用 unlistenFn 解除事件监听
+                        // 修改这里：直接调用 unlistenFn，不需要 await
                         const unlistenFn = await window.onCloseRequested(() => {});
-                        await unlistenFn();
+                        unlistenFn();
                         
-                        // 然后关闭窗口
                         await window.close();
                         console.log(`Closed window: ${window.label}`);
                     } catch (err) {
@@ -143,15 +142,16 @@ export async function listenFixedWindows() {
                             console.log('触发窗口关闭事件:', label);
                             try {
                                 // 添加窗口标签回到窗口池
-                                updateAuth('windowPool', {state: 0, windowName: label}, {windowName: label})
+                                await updateAuth('windowPool', {state: 0, windowName: label}, {windowName: label})
                             } catch (error) {
                                 console.error('处理窗口关闭事件时出错:', error);
                             }
                         });
 
                         // 监听窗口销毁事件来清理监听器
-                        await win.once('tauri://destroyed', async () => {
-                            await unlistenFn();
+                        await win.once('tauri://destroyed', () => {
+                            // 移除 await，直接调用 unlistenFn
+                            unlistenFn();
                         });
 
                         console.log('关闭事件监听器设置完成:', label);

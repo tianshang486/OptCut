@@ -7,17 +7,17 @@
   <!--  <main class="container">-->
   <!--    <h1>Welcome to Tauri + Vue</h1>-->
 
-  <!--    <div class="row">-->
-  <!--      <a href="https://vitejs.dev" target="_blank">-->
-  <!--        <img src="/vite.svg" class="logo vite" alt="Vite logo"/>-->
-  <!--      </a>-->
-  <!--      <a href="https://tauri.app" target="_blank">-->
-  <!--        <img src="/tauri.svg" class="logo tauri" alt="Tauri logo"/>-->
-  <!--      </a>-->
-  <!--      <a href="https://vuejs.org/" target="_blank">-->
-  <!--        <img src="./assets/vue.svg" class="logo vue" alt="Vue logo"/>-->
-  <!--      </a>-->
-  <!--    </div>-->
+      <div class="row">
+<!--        <a href="https://vitejs.dev" target="_blank">-->
+<!--          <img src="/vite.svg" class="logo vite" alt="Vite logo"/>-->
+<!--        </a>-->
+<!--        <a href="https://tauri.app" target="_blank">-->
+<!--          <img src="/tauri.svg" class="logo tauri" alt="Tauri logo"/>-->
+<!--        </a>-->
+<!--        <a href="https://vuejs.org/" target="_blank">-->
+<!--          <img src="./assets/vue.svg" class="logo vue" alt="Vue logo"/>-->
+<!--        </a>-->
+      </div>
   <!--    <p>Click on the Tauri, Vite, and Vue logos to learn more.</p>-->
 
   <!--    <form class="row" @submit.prevent="greet">-->
@@ -37,7 +37,7 @@
   font-weight: 400;
 
   color: #0f0f0f;
-  background-color: transparent;
+  background-color: rgba(15, 15, 15, 0);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;

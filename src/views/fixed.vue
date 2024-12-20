@@ -5,6 +5,9 @@ import {onMounted, onUnmounted, Ref, ref, UnwrapRef} from "vue";
 import {invoke} from "@tauri-apps/api/core";
 import {emit, listen} from "@tauri-apps/api/event";
 import {copyImage} from "@/windows/method.ts";
+import {Canvas, FabricImage} from 'fabric';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+import { PaintingTools } from '@/windows/painting'
 
 const NewWindows = new Windows()
 // 从url中获取截图路径?path=' + result.path,
@@ -25,7 +28,7 @@ const image_ocr: any = ref([])
 const is_ocr: Ref<UnwrapRef<boolean>, UnwrapRef<boolean> | boolean> = ref(false)
 // 用于跟踪菜单状态
 
-let menuBounds = {x: 0, y: 0, width: 200, height: 500};
+let menuBounds = {x: 0, y: 0, width: 50, height: 138};
 
 const win = new Windows()
 
@@ -93,12 +96,12 @@ async function CreateContextMenu(event: any) {
   const y = event.screenY - 10;
 
   // 保存菜单位置信息
-  menuBounds = {
-    x: x,
-    y: y,
-    width: 100,
-    height: 300
-  };
+  // menuBounds = {
+  //   x: x,
+  //   y: y,
+  //   width: 50,
+  //   height: 200
+  // };
   // /#/fixed_menu 给url添加参数,image_path
   const urlWithParams = `/#/contextmenu?path=${image_path.value}&label=${label}`;
   console.log(urlWithParams)
@@ -119,7 +122,7 @@ async function CreateContextMenu(event: any) {
     fullscreen: false,
     dragDropEnabled: true,
     center: false,
-    shadow: true,
+    shadow: false,
     theme: 'dark',
     hiddenTitle: true,
     skipTaskbar: true,
@@ -127,7 +130,7 @@ async function CreateContextMenu(event: any) {
     focus: false,
   };
 
-  await  win.createWin(options, {x: event.x, y: event.y});
+  await win.createWin(options, {x: event.x, y: event.y});
 
 }
 
@@ -159,37 +162,118 @@ onUnmounted(() => {
   document.removeEventListener('click', handleCloseMenu);
   window.removeEventListener('blur', handleCloseMenu);
   document.removeEventListener('keydown', handleCloseMenu);
+  if (paintingTools) {
+    paintingTools.cleanup()
+  }
 });
+// 在 script setup 顶部添加 paintingTools 引用
+let paintingTools: PaintingTools | null = null
+
+// 将 canvas 初始化移 onMounted 中
+onMounted(() => {
+  // 获取页面大小
+  const img = new Image();
+  img.src = path;
+
+  // 等片加载完成
+  img.onload = async () => {
+    const canvas = new Canvas('c', {
+      width: img.width,
+      height: img.height,
+      backgroundColor: 'transparent'
+    });
+
+    // 创建绘图工具实例并传入 store
+    paintingTools = new PaintingTools(canvas)
+
+    // 先加载图片
+    await FabricImage.fromURL(path).then((fabricImg) => {
+      fabricImg.set({
+        left: 0,
+        top: 0,
+        width: img.width,
+        height: img.height,
+        selectable: false,
+        evented: false,
+        hoverCursor: 'default'
+      });
+      canvas.add(fabricImg);
+      canvas.renderAll();
+    });
+
+    // 创建工具栏窗口
+    let toolbarWin: any = null
+    toolbarWin = await NewWindows.createWin({
+      label: 'Toolbar',
+      url: `/#/painting-toolbar?sourceLabel=${label}`,
+      title: 'Toolbar',
+      width: 380,
+      height: 40,
+      decorations: false,
+      transparent: true,
+      alwaysOnTop: true,
+      shadow: false,
+      x: window.screenX,
+      y: window.screenY + img.height + 5,
+    }, {parent: label});
+
+    // 监听窗口关闭事件
+    const currentWindow = await NewWindows.getWin(label);
+    if (currentWindow) {
+      await currentWindow.onCloseRequested(async () => {
+        if (toolbarWin) {
+          await NewWindows.closeWin(toolbarWin.label);
+        }
+      });
+    }
+  };
+
+});
+
+const copyText = async (text: string) => {
+  try {
+    await writeText(text);
+    console.log('文本已复制');
+  } catch (err) {
+    console.error('复制失败:', err);
+  }
+};
 
 </script>
 
+
 <template>
   <div class="screenshot-container">
-    <img :src="path" alt="Screenshot" class="screenshot-image full" v-if="!is_ocr"/>
+    <!-- Canvas 始终示 -->
+    <canvas id="c"></canvas>
+
+    <!-- OCR 结果显示 -->
     <div class="content" v-if="is_ocr">
-      <div class="image-container">
-        <img :src="path" alt="Screenshot" class="screenshot-image"/>
-        <div class="ocr-overlay">
-          <div
-              v-for="(item, index) in image_ocr?.data"
-              :key="index"
-              class="ocr-text"
-              :style="{
-              position: 'absolute',
-              left: `${Math.round(item.box[0][0])}px`,
-              top: `${Math.round(item.box[0][1])}px`,
-              width: `${Math.round(item.box[2][0] - item.box[0][0])}px`,
-              height: `${Math.round(item.box[2][1] - item.box[0][1])}px`,
-              lineHeight: `${Math.round(item.box[2][1] - item.box[0][1])}px`,
-              fontSize: `${Math.round((item.box[2][1] - item.box[0][1]) * 0.9)}px`,
-            }"
-          >
-            {{ item.text }}
-          </div>
+      <!-- OCR 文本覆盖层 -->
+      <div class="ocr-overlay">
+        <div
+            v-for="(item, index) in image_ocr?.data"
+            :key="index"
+            class="ocr-text"
+            :style="{
+            position: 'absolute',
+            left: `${Math.round(item.box[0][0])}px`,
+            top: `${Math.round(item.box[0][1])}px`,
+            width: `${Math.round(item.box[2][0] - item.box[0][0])}px`,
+            height: `${Math.round(item.box[2][1] - item.box[0][1])}px`,
+            lineHeight: `${Math.round(item.box[2][1] - item.box[0][1])}px`,
+            fontSize: `${Math.round((item.box[2][1] - item.box[0][1]) * 0.9)}px`,
+          }"
+            @dblclick="() => copyText(item.text)"
+        >
+          {{ item.text }}
         </div>
       </div>
-      <div id="container" class="link">
-        <div v-for="(item, index) in image_ocr?.data" :key="index">
+
+      <!-- 右侧文本列表 -->
+      <div class="link">
+        <div v-for="(item, index) in image_ocr?.data" :key="index" class="text-item">
+          <span class="line-number">{{ index + 1 }}</span>
           <p>{{ item.text }}</p>
         </div>
       </div>
@@ -198,93 +282,42 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-:root {
-  margin: 0 !important;
-  padding: 0 !important;
-  background: transparent !important;
-}
-
-/* 容器样式 */
 .screenshot-container {
-  display: flex; /* 使用 flexbox 布局 */
-  align-items: center; /* 垂直居中对齐 */
-  width: 100vw; /* 容器宽度 */
-  height: 100vh; /* 容器高度 */
-  position: fixed; /* 固定位置 */
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  position: fixed;
   top: 0;
   left: 0;
 }
 
-/* 图片样式 */
-.screenshot-image.full {
-  width: 100%; /* 设置图片宽度为 100% */
-  height: auto; /* 高度自适应 */
-  object-fit: cover; /* 确保图片保持比例 */
+#c {
+  flex: 1;
+  height: 100%;
+  object-fit: contain;
 }
 
-.screenshot-image {
-  width: calc(100vw - 300px); /* 设置图片宽度为容器宽度减去链接的100px */
-  height: auto; /* 高度自适应 */
-  object-fit: cover; /* 确保图片保持比例 */
-}
-
-/* 内容容器样式 */
+/* OCR 内容容器 */
 .content {
-  display: flex; /* 使用 flexbox 布局 */
-  width: 100%; /* 内容容器宽度 */
-  height: 100%; /* 内容容器高度 */
-}
-
-/* 链接样式 */
-.link {
-  width: 300px; /* 固定宽度为 300px */
-  color: #ffffff; /* 文字颜色为白色 */
-  background: rgb(43, 43, 43); /* 背景颜色 */
-  text-align: center; /* 文字居中 */
-  white-space: normal; /* 允许内容换行 */
-  overflow-x: hidden; /* 隐藏横向溢出的内容 */
-  overflow-y: auto; /* 允许垂直溢出时滚动 */
-  padding: 10px; /* 增加内边距 */
-  box-sizing: border-box; /* 边框和内边距包含在宽度内 */
-  word-break: break-word; /* 长单词或URL在到达容器边界时在内部换行 */
-}
-
-/* 自定义滚动条样式 */
-::-webkit-scrollbar {
-  width: 3px;
-  height: 3px;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: #005cfd;
-  border-radius: 5px;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: #005cfd;
-  border-radius: 5px;
-
-
-}
-
-/* 添加新的样式 */
-.image-container {
-  position: relative;
-  width: calc(100vw - 300px);
-  height: 100vh;
-}
-
-.ocr-overlay {
+  display: flex;
+  width: 100%;
+  height: 100%;
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
+}
+
+/* OCR 文本覆盖层 */
+.ocr-overlay {
+  flex: 1;
+  position: relative;
+  width: calc(100% - 300px);
   height: 100%;
 }
 
 .ocr-text {
   background: transparent;
-  color: transparent;
+  color: transparent;  /* 默认文字透明 */
   cursor: text;
   user-select: text;
   pointer-events: auto;
@@ -296,17 +329,78 @@ onUnmounted(() => {
   z-index: 1000;
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 
-/* 鼠标悬停时显示半透明背景 */
 .ocr-text:hover {
-  background: rgba(255, 255, 0, 0.1);
-  border: 1px solid rgba(255, 255, 0, 0.3);
+  background: rgba(255, 255, 0, 0.71);
+  border: 1px solid rgb(120, 246, 150);
+  color: rgb(0, 92, 253);  /* 悬浮时文字显示为半透明黑色 */
 }
 
-/* 移除自定义选中样式，使用系统默认的蓝色选中效果 */
-/* .ocr-text::selection {
-  // 移除这部分，让系统默认选中效果生效
-} */
+.ocr-text::selection,
+.ocr-text *::selection {  /* 确保字内容也能被选中 */
+  background: rgba(0, 123, 255, 0.3);
+  color: #000;  /* 选中时文字显示为黑色 */
+}
 
+/* 右侧文本列表 */
+.link {
+  width: 300px;
+  height: 100%;
+  color: #ffffff;
+  background: rgb(43, 43, 43);
+  padding: 10px;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #005cfd;
+  border-radius: 5px;
+}
+
+/* 文本项容器 */
+.text-item {
+  display: flex;
+  align-items: flex-start;
+  margin: 8px 0;
+  padding: 5px;
+}
+
+.text-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* 行号样式 */
+.line-number {
+  min-width: 24px;
+  margin-right: 8px;
+  color: #666;
+  text-align: right;
+  user-select: none;
+}
+
+/* 文本内容样式 */
+.text-item p {
+  margin: 0;
+  flex: 1;
+  text-align: left;
+}
+
+/* 移除之前的 p 样式 */
+.link p {
+  margin: 0;
+  padding: 0;
+}
+
+.link p:hover {
+  background: none;
+}
 </style>

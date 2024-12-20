@@ -5,6 +5,7 @@
   "windows": [
     "main",
     "screenshot",
+    "Toolbar",
     "fixed",
     "fixed_0",
     "fixed_1",

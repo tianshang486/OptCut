@@ -1,10 +1,9 @@
 <template>
-  <div class="v3-context-menu">
+  <div v-if="isReady" class="v3-context-menu" :class="{ 'menu-show': isReady }">
     <div class="v3-context-menu-item"
          v-for="item in menuItems"
          :key="item.label"
          @click="handleSelect(item.label)">
-      <i v-if="item.icon" class="menu-icon">{{ item.icon }}</i>
       <span>{{ item.label }}</span>
     </div>
   </div>
@@ -29,27 +28,10 @@ const label: any = ref(params.get('label'))
 console.log(image_path.value, label.value,'父信息')// const image_ocr: any = ref([])
 // const activeIndex = ref('1')
 const menuItems = [
-  {
-    label: '复制', icon: '📋', handler: () => {
-      copyImage(image_path.value).then(() => {
-        NewWindows.closeWin(label.value)
-
-      })
-    }
-  },
-  {label: '复制关闭', icon: '✂️', handler: () => copyAndClose(image_path.value)},
-  {
-    label: 'OCR', icon: '👁️', handler: async () => {
-      const img = await readFileImage(image_path.value)
-      ocr(img)
-    }
-  },
-  {
-    label: '关闭窗口', icon: '❌', handler: async () => {
-      await NewWindows.closeWin(label.value);
-      await NewWindows.closeWin('contextmenu');
-    }
-  },
+  { label: '复制', handler: () => copyImage(image_path.value).then(() => NewWindows.closeWin('contextmenu')) },
+  { label: '复制关闭', handler: () => copyAndClose(image_path.value) },
+  { label: 'OCR', handler: async () => { const img = await readFileImage(image_path.value); ocr(img) } },
+  { label: '关闭窗口', handler: async () => { await NewWindows.closeWin(label.value); await NewWindows.closeWin('contextmenu'); } },
 ]
 
 async function readFileImage(path: string) {
@@ -91,6 +73,11 @@ onMounted(() => {
       await NewWindows.closeWin('contextmenu');
     }
   }, 1000); // 每秒检查一次
+
+  // 延迟显示菜单,等待完全加载
+  setTimeout(() => {
+    isReady.value = true
+  }, 100)
 });
 
 
@@ -123,42 +110,53 @@ const handleSelect = (index: string) => {
     item.handler()
   }
 }
+
+const isReady = ref(false)
 </script>
 
-<style scoped>
+<style>
 
+:root {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
 
 .v3-context-menu {
-  min-width: 180px;
-  background: #fff;
-  border-radius: 4px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  min-width: 120px;
+  background: #2b2b2b;
+  border-radius: 5px;
+  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.2);
   position: fixed;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
   overflow: hidden;
-  margin: 0;
-  padding: 0;
+  opacity: 0;
+  transform: scale(0.95);
+  transition: all 0.1s ease-out;
+}
+
+.menu-show {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .v3-context-menu-item {
-  padding: 8px 16px;
-  font-size: 14px;
+  padding: 6px 14px;
+  font-size: 13px;
   display: flex;
+  justify-content: center;
   align-items: center;
   cursor: pointer;
-  transition: all 0.2s;
-  color: #333;
+  color: #e1e1e1;
+  transition: all 0.1s;
+  background: #2b2b2b;
+  user-select: none;
+  min-height: 22px;
 }
 
 .v3-context-menu-item:hover {
-  background: #f5f7fa;
-}
-
-.menu-icon {
-  margin-right: 8px;
-  font-size: 16px;
+  background: #0063e1; /* macOS 风格的蓝色 */
+  color: #ffffff;
 }
 </style>
