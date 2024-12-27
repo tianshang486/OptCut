@@ -5,7 +5,7 @@ import {onMounted, onUnmounted, Ref, ref, UnwrapRef} from "vue";
 import {invoke} from "@tauri-apps/api/core";
 import {emit, listen} from "@tauri-apps/api/event";
 import {copyImage} from "@/windows/method.ts";
-import {Canvas, FabricImage} from 'fabric';
+import { fabric } from 'fabric'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { PaintingTools } from '@/windows/painting'
 
@@ -175,9 +175,9 @@ onMounted(() => {
   const img = new Image();
   img.src = path;
 
-  // 等片加载完成
+  // 等图片加载完成
   img.onload = async () => {
-    const canvas = new Canvas('c', {
+    const canvas = new fabric.Canvas('c', {
       width: img.width,
       height: img.height,
       backgroundColor: 'transparent'
@@ -186,8 +186,8 @@ onMounted(() => {
     // 创建绘图工具实例并传入 store
     paintingTools = new PaintingTools(canvas)
 
-    // 先加载图片
-    await FabricImage.fromURL(path).then((fabricImg) => {
+    // 修改这里：使用 fabric.Image.fromURL 替代 FabricImage.fromURL
+    await fabric.Image.fromURL(path, (fabricImg) => {
       fabricImg.set({
         left: 0,
         top: 0,
@@ -207,8 +207,8 @@ onMounted(() => {
       label: 'Toolbar',
       url: `/#/painting-toolbar?sourceLabel=${label}`,
       title: 'Toolbar',
-      width: 380,
-      height: 40,
+      width: 280,
+      height: 48,
       decorations: false,
       transparent: true,
       alwaysOnTop: true,
