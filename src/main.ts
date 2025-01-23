@@ -3,7 +3,7 @@ import App from "./App.vue";
 import router from './router/index';
 import {listenShortcuts, listenFixedWindows} from "@/windows/ShortcutRegistration";
 import pinia from './stores'  //引入
-
+import './app.css';
 
 // 创建应用实例
 const app = createApp(App);

@@ -94,10 +94,9 @@ export async function listenShortcuts() {
         try {
             const allWindows = await windows.getAllWin();
             const closePromises = allWindows
-                .filter(window => window.label.startsWith('fixed'))
+                .filter(window => window.label.startsWith('fixed') || window.label === 'Toolbar')
                 .map(async window => {
                     try {
-                        // 修改这里：直接调用 unlistenFn，不需要 await
                         const unlistenFn = await window.onCloseRequested(() => {});
                         unlistenFn();
                         
@@ -109,7 +108,7 @@ export async function listenShortcuts() {
                 });
 
             await Promise.all(closePromises);
-            console.log('All fixed windows closed successfully');
+            console.log('All fixed windows and toolbars closed successfully');
             
             // 将库中所有窗口状态设置为0
             await updateAuth('windowPool', {state: 0}, {1: 1});

@@ -14,7 +14,7 @@ export const windowConfig = {
     center: false,           // 窗口居中显示
     resizable: false,        // 是否支持缩放
     maximized: false,       // 最大化窗口
-    decorations: true,     // 窗口是否装饰边框及导航条
+    decorations: false,     // 窗口是否装饰边框及导航条
     alwaysOnTop: true,     // 置顶窗口
     dragDropEnabled: true, // 禁止系统拖放
     visible: false,         // 隐藏窗口
@@ -23,7 +23,7 @@ export const windowConfig = {
     skipTaskbar: true,   // 任务栏中不显示窗口
     focus: false,         // 窗口是否获得焦点
     contentProtected: false, // 窗口内容是否受保护
-    shadow: true,         // 窗口是否有阴影
+    shadow: false,         // 窗口是否有阴影
     theme: 'dark',         // 窗口主题
     hiddenTitle: true,    // 窗口标题栏是否隐藏
 

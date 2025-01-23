@@ -44,6 +44,8 @@
     "core:window:allow-close",
     "core:window:allow-set-size",
     "core:window:allow-destroy",
+    "core:window:allow-set-position",
+    "positioner:default",
     "fs:read-all",
     "fs:allow-open",
     "fs:allow-write",

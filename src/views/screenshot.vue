@@ -264,15 +264,16 @@ const handleMouseUp = async (e: MouseEvent) => {
         url: url,
         width: width,
         height: height,
-        x: x - 8,
-        y: y - 32,
+        x: x,
+        y: y ,
         resizable: true,
         fullscreen: false,
         maximized: false,
         transparent: true,
         center: false,
-        decorations: true,
-        focus: false
+        decorations: false,
+        focus: true,
+
       };
       
       // 先创建窗口
@@ -327,7 +328,7 @@ const selectionHeight = computed(() => {
 })
 </script>
 <template>
-  <div class="screenshot-container" @mousemove="handleGlobalMouseMove">
+  <div class="screenshot-container space-x-0 space-y-0" @mousemove="handleGlobalMouseMove">
     <img :src="path" alt="Screenshot" class="screenshot-image"/>
     <div class="selection-box" :style="selectionStyle"></div>
     <div class="overlay" :style="overlayStyle"></div>
@@ -349,8 +350,6 @@ const selectionHeight = computed(() => {
 
 <style scoped>
 :root {
-  margin: 0 !important;
-  padding: 0 !important;
   background: transparent !important;
 }
 

@@ -1,4 +1,8 @@
-use tauri::{menu::{Menu, MenuItem, Submenu}, tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}, Emitter, Manager, Runtime};
+use tauri::{
+    menu::{Menu, MenuItem, Submenu},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Emitter, Manager, Runtime,
+};
 
 pub fn create_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
     let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
@@ -7,15 +11,24 @@ pub fn create_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
     let edit_i = MenuItem::with_id(app, "edit_file", "测试点击", true, None::<&str>)?;
     let screenshots_i = MenuItem::with_id(app, "screenshots", "截图", true, None::<&str>)?;
     // 关闭所有截图窗口
-    let close_all_i = MenuItem::with_id(app, "close_all_screenshots", "关闭所有截图窗口", true, None::<&str>)?;
+    let close_all_i = MenuItem::with_id(
+        app,
+        "close_all_screenshots",
+        "关闭所有截图窗口",
+        true,
+        None::<&str>,
+    )?;
     let a = Submenu::with_id_and_items(app, "File", "文章", true, &[&screenshots_i, &edit_i])?;
     // 分割线
-    let menu = Menu::with_items(app, &[ &show_i, &hide_i, &screenshots_i, &close_all_i, &a,&quit_i,])?;
+    let menu = Menu::with_items(
+        app,
+        &[&show_i, &hide_i, &screenshots_i, &close_all_i, &a, &quit_i],
+    )?;
 
     let _ = TrayIconBuilder::with_id("tray")
         .icon(app.default_window_icon().unwrap().clone())
         .menu(&menu)
-        .menu_on_left_click(false)
+        .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id.as_ref() {
             "quit" => {
                 app.exit(0);
@@ -39,7 +52,8 @@ pub fn create_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
             }
             "close_all_screenshots" => {
                 //  给前端发送关闭所有截图窗口请求
-                app.emit("close_all_screenshots", "").expect("TODO: panic message");
+                app.emit("close_all_screenshots", "")
+                    .expect("TODO: panic message");
             }
             // Add more events here
             _ => {}
@@ -60,8 +74,8 @@ pub fn create_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
         })
         .build(app);
     println!("Emitting shortcut_key event");
-    app.emit("shortcut_key", "").expect("Failed to emit shortcut_key event");
+    app.emit("shortcut_key", "")
+        .expect("Failed to emit shortcut_key event");
     println!("Tray icon created");
     Ok(())
 }
-

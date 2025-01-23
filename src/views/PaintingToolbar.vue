@@ -1,11 +1,19 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { usePaintingStore } from '@/stores/paintingStore'
-import { emit } from '@tauri-apps/api/event'
+import { emit, listen } from '@tauri-apps/api/event'
 
 const store = usePaintingStore()
 const showArrowDropdown = ref(false)
 const showLineDropdown = ref(false)
+const toolsDisabled = ref(false)  // 添加工具禁用状态
+
+// 初始化时设置为取消状态
+
+onMounted(() => {
+  // @ts-ignore
+  store.setTool(null)
+})
 
 // 工具配置
 const tools = [
@@ -14,7 +22,7 @@ const tools = [
     name: 'arrow', 
     icon: '➡', 
     label: '箭头',
-    hasDropdown: true,
+    hasDropdown: false,
     dropdownItems: [
       { value: 'arrow1', icon: '→' },
       { value: 'arrow2', icon: '⟶' }
@@ -24,12 +32,14 @@ const tools = [
     name: 'line', 
     icon: '—', 
     label: '直线',
-    hasDropdown: true,
+    hasDropdown: false,
     dropdownItems: [
       { value: 'line1', icon: '—' },
       { value: 'line2', icon: '┄' }
     ]
-  }
+  },
+  { name: 'brush', icon: '✏️', label: '画笔' },
+  { name: 'text', icon: 'T', label: '文本' }
 ]
 
 // 颜色选项
@@ -41,6 +51,19 @@ const colors = [
   { value: '#0000FF', label: '蓝色' },
   { value: '#FFFFFF', label: '白色' }
 ]
+
+// 监听工具切换事件
+listen('toolbar-tool-change', async (event: any) => {
+  const { tool, disableTools } = event.payload
+  
+  // 设置工具状态
+  store.setTool(tool)
+  
+  // 处理工具禁用状态
+  if (disableTools !== undefined) {
+    toolsDisabled.value = disableTools
+  }
+})
 
 // 切换工具
 const switchTool = async (toolName: string) => {
@@ -61,13 +84,33 @@ const switchColor = async (color: string) => {
     targetLabel: sourceLabel
   })
 }
+
+// 添加取消绘图方法
+const cancelDrawing = async () => {
+  // @ts-ignore
+  store.setTool(null)
+  const sourceLabel = new URLSearchParams(window.location.search).get('sourceLabel')
+  await emit('toolbar-tool-change', {
+    tool: null,
+    targetLabel: sourceLabel
+  })
+}
 </script>
 
 <template>
-  <div class="toolbar-container">
-    <div class="main-toolbar">
+  <div class="m-0">
+    <div class="space-x-0.5 space-y-0 m-0 flex flex-row   bg-neutral-700 rounded-md">
       <!-- 工具组 -->
       <div class="tools-group">
+        <!-- 修改取消按钮，添加选中状态 -->
+        <div 
+          class="tool-item cancel-btn" 
+          :class="{ active: store.currentTool === null }"
+          @click="cancelDrawing" 
+          title="取消绘图"
+        >
+          ✕
+        </div>
         <div 
           v-for="tool in tools" 
           :key="tool.name"
@@ -75,8 +118,11 @@ const switchColor = async (color: string) => {
         >
           <div
             class="tool-item"
-            :class="{ active: store.currentTool === tool.name }"
-            @click.stop="switchTool(tool.name)"
+            :class="{ 
+              active: store.currentTool === tool.name,
+              disabled: toolsDisabled
+            }"
+            @click.stop="!toolsDisabled && switchTool(tool.name)"
             :title="tool.label"
           >
             {{ tool.icon }}
@@ -106,17 +152,22 @@ const switchColor = async (color: string) => {
       </div>
 
       <!-- 分隔线 -->
-      <div class="divider"></div>
+      <div class="separator px-0.5">
+        |
+      </div>
 
       <!-- 颜色选择器 -->
       <div class="colors-group">
-        <div 
-          v-for="color in colors" 
+        <div
+          v-for="color in colors"
           :key="color.value"
           class="color-item"
-          :class="{ active: store.currentColor === color.value }"
+          :class="{ 
+            active: store.currentColor === color.value,
+            disabled: toolsDisabled
+          }"
           :style="{ backgroundColor: color.value, border: color.value === '#FFFFFF' ? '1px solid #ddd' : 'none' }"
-          @click.stop="switchColor(color.value)"
+          @click.stop="!toolsDisabled && switchColor(color.value)"
           :title="color.label"
         />
       </div>
@@ -126,24 +177,9 @@ const switchColor = async (color: string) => {
 
 <style>
 :root, html, body {
-  margin: 0 !important;
-  padding: 0 !important;
   background: transparent !important;
 }
 
-.toolbar-container {
-  padding: 4px;
-}
-
-.main-toolbar {
-  background: #2b2b2b;
-  border-radius: 6px;
-  padding: 6px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
 
 .tools-group, .colors-group {
   display: flex;
@@ -216,12 +252,7 @@ const switchColor = async (color: string) => {
   background: rgba(255, 255, 255, 0.1);
 }
 
-.divider {
-  width: 1px;
-  height: 20px;
-  background-color: rgba(255, 255, 255, 0.2);
-  margin: 0 4px;
-}
+
 
 .color-item {
   width: 20px;
@@ -245,5 +276,26 @@ const switchColor = async (color: string) => {
 
 .color-item.active {
   box-shadow: 0 0 0 2px #fff;
+}
+
+/* 添加取消按钮样式 */
+.cancel-btn {
+  color: #ff4d4f !important;
+  font-weight: bold;
+}
+
+.cancel-btn:hover {
+  background: rgba(255, 77, 79, 0.1) !important;
+}
+
+.tool-item.disabled,
+.color-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+.tool-item.disabled:hover {
+  background: none;
 }
 </style>

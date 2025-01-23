@@ -3,7 +3,8 @@
     <div class="v3-context-menu-item"
          v-for="item in menuItems"
          :key="item.label"
-         @click="handleSelect(item.label)">
+         :class="{ 'disabled': item.disabled }"
+         @click="!item.disabled && handleSelect(item.label)">
       <span>{{ item.label }}</span>
     </div>
   </div>
@@ -25,13 +26,65 @@ const hash = window.location.hash // 获取 #/fixed_menu?path=xxx&label=xxx
 const params = new URLSearchParams(hash.split('?')[1]) // 分割获取参数部分
 const image_path: any = ref(params.get('path'))
 const label: any = ref(params.get('label'))
+const is_ocr: any = ref(params.get('is_ocr') === 'true') // 获取 OCR 状态
+const is_translated: any = ref(params.get('is_translated') === 'true') // 从 URL 获取翻译状态
 console.log(image_path.value, label.value,'父信息')// const image_ocr: any = ref([])
 // const activeIndex = ref('1')
 const menuItems = [
-  { label: '复制', handler: () => copyImage(image_path.value).then(() => NewWindows.closeWin('contextmenu')) },
-  { label: '复制关闭', handler: () => copyAndClose(image_path.value) },
-  { label: 'OCR', handler: async () => { const img = await readFileImage(image_path.value); ocr(img) } },
-  { label: '关闭窗口', handler: async () => { await NewWindows.closeWin(label.value); await NewWindows.closeWin('contextmenu'); } },
+  { 
+    label: '复制', 
+    handler: () => copyImage(image_path.value).then(() => NewWindows.closeWin('contextmenu')),
+    disabled: false
+  },
+  { 
+    label: '复制关闭', 
+    handler: () => copyAndClose(image_path.value),
+    disabled: false
+  },
+  { 
+    label: 'OCR', 
+    handler: async () => {
+      const img = await readFileImage(image_path.value)
+      ocr(img)
+      NewWindows.closeWin('contextmenu')
+    },
+    disabled: is_ocr.value // OCR 后禁用
+  },
+  { 
+    label: '取消OCR', 
+    handler: () => {
+      emit('ocrImage', null)
+      is_translated.value = false // 重置翻译状态
+      NewWindows.closeWin('contextmenu')
+    },
+    disabled: !is_ocr.value // 未 OCR 时禁用
+  },
+  { 
+    label: '翻译', 
+    handler: async () => {
+      emit('translateText', '已翻译')
+      is_translated.value = true
+      NewWindows.closeWin('contextmenu')
+    },
+    disabled: !is_ocr.value || is_translated.value // 未 OCR 或已翻译时禁用
+  },
+  { 
+    label: '取消翻译', 
+    handler: async () => {
+      emit('cancelTranslate')
+      is_translated.value = false
+      NewWindows.closeWin('contextmenu')
+    },
+    disabled: !is_ocr.value || !is_translated.value // 未 OCR 或未翻译时禁用
+  },
+  { 
+    label: '关闭窗口', 
+    handler: async () => {
+      await NewWindows.closeWin(label.value)
+      await NewWindows.closeWin('contextmenu')
+    },
+    disabled: false
+  }
 ]
 
 async function readFileImage(path: string) {
@@ -52,6 +105,19 @@ listen('close_menu', async () => {
     await NewWindows.closeWin('contextmenu')
     console.log('关闭窗口')
   }, 100)
+})
+
+// 监听翻译状态变化
+listen('translationStatus', (event: any) => {
+  is_translated.value = event.payload
+  console.log('Translation status updated:', is_translated.value) // 添加日志
+})
+
+// 监听翻译事件
+listen('translateText', async (event: any) => {
+  is_translated.value = true
+  console.log('Translation completed, status:', is_translated.value) // 添加日志
+  emit('translateText', event.payload)
 })
 
 // 使用getWin 获取父窗口是否存在,不存在则关闭子窗口
@@ -158,5 +224,15 @@ const isReady = ref(false)
 .v3-context-menu-item:hover {
   background: #0063e1; /* macOS 风格的蓝色 */
   color: #ffffff;
+}
+
+.v3-context-menu-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  color: #888;
+}
+
+.v3-context-menu-item.disabled:hover {
+  background: #2b2b2b; /* 禁用时不显示悬停效果 */
 }
 </style>

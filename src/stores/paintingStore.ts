@@ -3,8 +3,8 @@ import { defineStore } from 'pinia'
 export const usePaintingStore = defineStore('painting', {
   state: () => ({
     currentTool: 'rect',
-    currentColor: 'red',
-    currentArrowStyle: 'default'
+    currentColor: '#FF0000',
+    canDraw: true
   }),
 
   actions: {
@@ -12,10 +12,8 @@ export const usePaintingStore = defineStore('painting', {
       this.currentTool = tool
     },
     setColor(color: string) {
+      console.log('Store: 设置新颜色:', color)
       this.currentColor = color
-    },
-    setArrowStyle(style: string) {
-      this.currentArrowStyle = style
     }
   }
 })

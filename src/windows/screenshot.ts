@@ -31,6 +31,9 @@ export async function captureScreenshot(operationalID: string = 'default') {
             height: result.height,
             fullscreen: true,
             transparent: true,
+            maximizable: true,
+            decorations: false,
+            hiddenTitle: true,
             x: result.window_x,
             y: result.window_y,
         };

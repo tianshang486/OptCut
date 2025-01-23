@@ -1,19 +1,12 @@
-use std::{
-    env,
-    os::windows::process::CommandExt,
-    process::Command,
-};
-
+use std::{env, os::windows::process::CommandExt, process::Command};
+use std::path::{Path, PathBuf};
 use image::open;
 use mouse_position::mouse_position::Mouse;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use xcap::{image, Monitor};
 
-use crate::utils::{
-    color,
-    read_conf::read_conf,
-};
+use crate::utils::{color, read_conf::read_conf};
 
 #[derive(Serialize, Deserialize)]
 struct Struct {
@@ -100,6 +93,27 @@ fn normalized(filename: &str) -> String {
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub async fn ps_ocr_pd(image_path: &str) -> Result<String, String> {
+    println!("image_path: {},开始OCR识别", image_path);
+    // 根据平台选择正确的可执行文件路径src-tauri/tools/PaddleOCR-json_v1.4.1/PaddleOCR-json.exe
+    #[cfg(target_os = "windows")]
+    let mut p = paddleocr::Ppocr::new(
+        PathBuf::from("tools\\PaddleOCR-json_v1.4.1\\PaddleOCR-json.exe"), // path to binary
+        Default::default(), // language config_path, default `zh_CN`
+    )
+    .unwrap(); // initialize
+
+    let now = std::time::Instant::now(); // benchmark
+    // OCR files
+    let ocr_result = p.ocr(Path::new(image_path).into()).unwrap();
+    let decoded_result = serde_json::from_str::<serde_json::Value>(&ocr_result)
+        .map_err(|e| format!("解析OCR结果失败: {}", e))?;
+
+    println!("Elapsed: {:.2?}", now.elapsed());
+    // 直接返回解析后的JSON字符串
+    Ok(decoded_result.to_string())
+}
+#[tauri::command(rename_all = "snake_case")]
 pub fn capture_screen_one() -> Result<String, String> {
     let my_struct = Struct::new();
     // 直接获取鼠标位置和应屏幕，避免获取所有显示器
@@ -130,7 +144,7 @@ pub fn capture_screen_one() -> Result<String, String> {
         "width": screen.width(),
         "height": screen.height()
     })
-        .to_string())
+    .to_string())
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -165,7 +179,7 @@ pub fn capture_screen_fixed(x: i32, y: i32, width: u32, height: u32) -> Result<S
     Ok(json!({
         "path": path.to_string_lossy().to_string(),
     })
-        .to_string())
+    .to_string())
 }
 
 // #[tauri::command(rename_all = "snake_case")]
@@ -202,7 +216,14 @@ pub fn delete_temp_file() {
     while let Some(entry) = entries.next() {
         let entry = entry.unwrap();
         let path = entry.path();
-        if path.is_file() && path.file_name().unwrap().to_str().unwrap().starts_with("AGCut") {
+        if path.is_file()
+            && path
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("AGCut")
+        {
             println!("删除临时文件: {}", path.to_string_lossy());
             std::fs::remove_file(path).unwrap();
         }
@@ -211,7 +232,7 @@ pub fn delete_temp_file() {
 
 // 添加新的tauri命令
 #[tauri::command(rename_all = "snake_case")]
-pub async  fn read_config() -> Result<String, String> {
+pub async fn read_config() -> Result<String, String> {
     read_conf()
         .await
         .map(|config| serde_json::to_string(&config).unwrap_or_default())

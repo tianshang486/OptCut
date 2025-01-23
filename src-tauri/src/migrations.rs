@@ -1,11 +1,10 @@
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 pub fn get_migrations() -> Vec<Migration> {
-    vec![
-        Migration {
-            version: 1,
-            description: "create_initial_tables",
-            sql: "PRAGMA cache_size = -20000;  -- 20MB cache
+    vec![Migration {
+        version: 1,
+        description: "create_initial_tables",
+        sql: "PRAGMA cache_size = -20000;  -- 20MB cache
                   PRAGMA temp_store = MEMORY;  -- 使用内存存储临时表
                   
                   CREATE TABLE IF NOT EXISTS shortcutKey (
@@ -42,8 +41,6 @@ pub fn get_migrations() -> Vec<Migration> {
                       UPDATE windowPool SET UPDATE_TIME = CURRENT_TIMESTAMP
                       WHERE id = NEW.id;
                   END;",
-            kind: MigrationKind::Up,
-        }
-    ]
+        kind: MigrationKind::Up,
+    }]
 }
-

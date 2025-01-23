@@ -10,11 +10,14 @@ export class PaintingTools {
   private shapes: any[] = []
   private hoveredShape: any = null
   private store: any = {
-    currentTool: 'rect',
-    canDraw: true
+    currentTool: null,  // 初始设置为 null，表示没有选择工具
+    currentColor: '#FF0000'
   }
   private boundHandleKeyDown: (e: KeyboardEvent) => void = () => {}
+  // @ts-ignore
   private currentTool: string = 'rect'
+// 用于画笔
+  private currentText: any = null // 用于文本输入
 
   constructor(canvas: fabric.Canvas) {
     this.canvas = canvas
@@ -30,12 +33,43 @@ export class PaintingTools {
 
     // 监听工具切换事件
     listen('toolbar-tool-change', async (event: any) => {
-      const {tool, targetLabel} = event.payload
-      console.log('工具切换:', tool)
-      console.log('目标标签:', targetLabel)
+      const {tool} = event.payload
       this.store.currentTool = tool
       this.currentTool = tool
-    }).then(r => { console.log('监听工具切换事件成功:', r) })
+      
+      // 切换工具时的处理
+      if(tool === 'brush') {
+        this.canvas.isDrawingMode = true
+        this.canvas.freeDrawingBrush.color = this.store.currentColor
+        this.canvas.freeDrawingBrush.width = 2
+        
+        // 监听路径创建完成事件
+        this.canvas.on('path:created', (e: any) => {
+          const path = e.path
+          // 禁用控制框
+          path.set({
+            selectable: true,
+            hasControls: false,
+            hasBorders: false,
+            lockMovementX: true,
+            lockMovementY: true
+          })
+          // 将路径添加到 shapes 数组
+          this.shapes.push(path)
+        })
+      } else {
+        this.canvas.isDrawingMode = false
+        // 移除路径创建事件监听
+        this.canvas.off('path:created')
+      }
+    })
+
+    // 监听颜色变化事件
+    listen('toolbar-color-change', async (event: any) => {
+      const { color } = event.payload
+      this.setColor(color)
+      console.log('颜色变化:', color)
+    })
 
     this.initializeEvents()
   }
@@ -49,9 +83,6 @@ export class PaintingTools {
     this.canvas.on('mouse:over', (e) => this.onMouseOver(e))
     this.canvas.on('mouse:out', (e) => this.onMouseOut(e))
     this.canvas.on('mouse:wheel', (e) => this.onMouseWheel(e))  // 添加滚轮事件
-    this.canvas.on('mouse:dblclick', () => {
-      this.store.canDraw = true  // 双击后允许继续画图
-    })
   }
 
   // 鼠标悬停事件处理
@@ -68,6 +99,18 @@ export class PaintingTools {
           }),
           opacity: 0.8
         })
+      } else if (e.target instanceof fabric.IText) {
+        // 文本特殊处理
+        if (!e.target.isEditing) {
+          e.target.set({
+            shadow: new fabric.Shadow({
+              color: 'rgba(0,123,255,0.3)',
+              blur: 10,
+              offsetX: 0,
+              offsetY: 0
+            })
+          })
+        }
       } else {
         e.target.set({
           shadow: new fabric.Shadow({
@@ -92,6 +135,12 @@ export class PaintingTools {
           shadow: null,
           opacity: 1
         })
+      } else if (e.target instanceof fabric.IText) {
+        if (!e.target.isEditing) {
+          e.target.set({
+            shadow: null
+          })
+        }
       } else {
         e.target.set({
           shadow: null,
@@ -148,53 +197,69 @@ export class PaintingTools {
   }
 
   private onMouseDown(e: any) {
-    if (!this.store.canDraw) return
+    if (!this.store.currentTool) return
 
     const pointer = this.canvas.getPointer(e.e)
-    console.log('===== 绘制调试信息 =====')
-    console.log('当前工具 (this.currentTool):', this.currentTool)
-    console.log('Store中的工具 (store.currentTool):', this.store.currentTool)
-    console.log('是否可以绘制 (store.canDraw):', this.store.canDraw)
-    console.log('========================')
-
     this.isDrawing = true
     this.startX = pointer.x
     this.startY = pointer.y
 
-    // 直接从 store 获取当前工具
-    const currentTool = this.store.currentTool
-    console.log('准备创建图形，使用工具:', currentTool)
-
-    switch (currentTool) {  // 改用 store 中的工具
+    switch (this.store.currentTool) {
       case 'rect':
-        console.log('创建矩形')
-        this.currentShape = this.createRect({
+        this.currentShape = new fabric.Rect({
           left: this.startX,
           top: this.startY,
           width: 0,
-          height: 0
+          height: 0,
+          stroke: this.store.currentColor,
+          strokeWidth: 2,
+          fill: 'transparent'
         })
         break
       case 'line':
-        console.log('创建直线')
-        this.currentShape = this.createLine({
-          x1: this.startX,
-          y1: this.startY,
-          x2: this.startX,
-          y2: this.startY
+        this.currentShape = new fabric.Line([this.startX, this.startY, this.startX, this.startY], {
+          stroke: this.store.currentColor,
+          strokeWidth: 2
         })
         break
       case 'arrow':
-        console.log('创建箭头')
         this.currentShape = this.createArrowFromSVG({
           x1: this.startX,
           y1: this.startY,
           x2: this.startX,
-          y2: this.startY
+          y2: this.startY,
+          stroke: this.store.currentColor
         })
         break
-      default:
-        console.log('未知工具类型:', currentTool)
+      case 'text':
+        this.currentText = new fabric.IText('', {
+          left: pointer.x,
+          top: pointer.y,
+          fontSize: 20,
+          fill: this.store.currentColor,
+          editable: true,
+          cursorWidth: 1,
+          cursorDuration: 600,
+          cursorColor: this.store.currentColor,
+          // hideDefaultStyle: false,
+          padding: 7,
+          selectable: true,
+          hasControls: false,
+          hasBorders: false,
+          lockMovementX: true,
+          lockMovementY: true
+        })
+        this.canvas.add(this.currentText)
+        this.currentText.enterEditing()
+        this.canvas.requestRenderAll()
+        // 将文本对象添加到 shapes 数组中
+        this.shapes.push(this.currentText)
+        break
+    }
+
+    if (this.currentShape) {
+      this.canvas.add(this.currentShape)
+      this.canvas.renderAll()
     }
   }
 
@@ -315,59 +380,21 @@ export class PaintingTools {
 
       return distance <= tolerance
     } else if (shape instanceof fabric.Path) {
-      const tolerance = 15
-
-      // 获取箭头的变换信息
-      const angle = shape.angle || 0
-      const radians = angle * Math.PI / 180
-      const scaleX = shape.scaleX || 1
-
-      // 获取箭头的起点
-      const startX = shape.left || 0
-      const startY = shape.top || 0
-
-      // 计算箭头的实际长度
-      const arrowLength = 1000 * scaleX
-
-      // 计算箭头的终点
-      const endX = startX + arrowLength * Math.cos(radians)
-      const endY = startY + arrowLength * Math.sin(radians)
-
-      const mouseX = pointer.x
-      const mouseY = pointer.y
-
-      const A = mouseX - startX
-      const B = mouseY - startY
-      const C = endX - startX
-      const D = endY - startY
-
-      const dot = A * C + B * D
-      const lenSq = C * C + D * D
-      let param = -1
-
-      if (lenSq !== 0) {
-        param = dot / lenSq
-      }
-
-      let nearestX, nearestY
-      if (param < 0) {
-        nearestX = startX
-        nearestY = startY
-      } else if (param > 1) {
-        nearestX = endX
-        nearestY = endY
-      } else {
-        nearestX = startX + param * C
-        nearestY = startY + param * D
-      }
-
-      const dx = mouseX - nearestX
-      const dy = mouseY - nearestY
-      const distance = Math.sqrt(dx * dx + dy * dy)
-
-      const headTolerance = param > 0.8 ? tolerance * 2 : tolerance
-
-      return distance <= headTolerance
+      // 使用 Fabric.js 内置的点击检测方法
+      return shape.containsPoint(new fabric.Point(pointer.x, pointer.y))
+    } else if (shape instanceof fabric.IText) {
+      // 文本框检测
+      const shapeLeft = shape.left || 0
+      const shapeTop = shape.top || 0
+      const shapeWidth = shape.width || 0
+      const shapeHeight = shape.height || 0
+      
+      return (
+        pointer.x >= shapeLeft &&
+        pointer.x <= shapeLeft + shapeWidth &&
+        pointer.y >= shapeTop &&
+        pointer.y <= shapeTop + shapeHeight
+      )
     }
     return false
   }
@@ -400,25 +427,22 @@ export class PaintingTools {
             const line = this.currentShape.getObjects()[0] as fabric.Line;
             const arrowHead = this.currentShape.getObjects()[1] as fabric.Triangle;
             
-            // 计算新的位置和角度
             const dx = pointer.x - this.startX;
             const dy = pointer.y - this.startY;
-            const angle = Math.atan2(dy, dx);
             const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx);
 
-            // 更新线条
             line.set({
               x2: length,
               y2: 0
             });
 
-            // 更新箭头头部
             arrowHead.set({
               left: length,
-              top: 0
+              top: 0,
+              angle: 90
             });
 
-            // 更新组的角度
             this.currentShape.set({
               angle: angle * 180 / Math.PI
             });
@@ -546,7 +570,7 @@ export class PaintingTools {
   }) {
     // 创建主干线条
     const line = new fabric.Line([0, 0, 0, 0], {
-      stroke: options.stroke || 'red',
+      stroke: options.stroke || this.store.currentColor,  // 使用传入的颜色或当前颜色
       strokeWidth: options.strokeWidth || 2,
       strokeUniform: true
     });
@@ -555,7 +579,7 @@ export class PaintingTools {
     const arrowHead = new fabric.Triangle({
       width: 15,
       height: 15,
-      fill: options.stroke || 'red',
+      fill: options.stroke || this.store.currentColor,  // 使用传入的颜色或当前颜色
       left: 0,
       top: 0,
       originX: 'center',
@@ -568,152 +592,13 @@ export class PaintingTools {
       left: options.x1,
       top: options.y1,
       selectable: true,
-      hasControls: true,
-      hasBorders: false,
+      hasControls: false,  // 禁用所有控制点
+      hasBorders: false,   // 禁用边框
       originX: 'left',
       originY: 'center',
       strokeUniform: true,
       objectCaching: false
     });
-
-    // 自定义控制点
-    const controls = {
-      start: new fabric.Control({
-        positionHandler: function(dim, finalMatrix, fabricObject) {
-          // 起点控制点位置
-          const x = -fabricObject.width / 2;  // 在线条起点
-          const y = 0;
-          return fabric.util.transformPoint(
-            new fabric.Point(x, y),
-            fabric.util.multiplyTransformMatrices(
-              fabricObject.canvas.viewportTransform,
-              fabricObject.calcTransformMatrix()
-            )
-          );
-        },
-        render: function(ctx, left, top) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(left, top, 6, 0, Math.PI * 2);
-          ctx.fillStyle = '#fff';
-          ctx.strokeStyle = '#0d6efd';
-          ctx.lineWidth = 2;
-          ctx.fill();
-          ctx.stroke();
-          ctx.restore();
-        },
-        actionHandler: function(eventData, transform, x, y) {
-          const line = transform.target.getObjects()[0] as fabric.Line;
-          const newLength = Math.sqrt(x * x + y * y);
-          line.set({ x1: -newLength });
-          transform.target.setCoords();
-          return true;
-        }
-      }),
-      middle: new fabric.Control({
-        positionHandler: function(dim, finalMatrix, fabricObject) {
-          // 中点控制点位置
-          const x = 0;  // 在线条中点
-          const y = -30;  // 向上偏移
-          return fabric.util.transformPoint(
-            new fabric.Point(x, y),
-            fabric.util.multiplyTransformMatrices(
-              fabricObject.canvas.viewportTransform,
-              fabricObject.calcTransformMatrix()
-            )
-          );
-        },
-        render: function(ctx, left, top) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(left, top, 6, 0, Math.PI * 2);
-          ctx.fillStyle = '#fff';
-          ctx.strokeStyle = '#0d6efd';
-          ctx.lineWidth = 2;
-          ctx.fill();
-          ctx.stroke();
-          ctx.restore();
-        },
-        actionHandler: function(eventData, transform, x, y) {
-          const group = transform.target;
-          const line = group.getObjects()[0] as fabric.Line;
-          const arrowHead = group.getObjects()[1] as fabric.Triangle;
-
-          // 计算曲线控制点
-          const startPoint = { x: line.x1, y: line.y1 };
-          const endPoint = { x: line.x2, y: line.y2 };
-          const midPoint = {
-            x: (startPoint.x + endPoint.x) / 2,
-            y: (startPoint.y + endPoint.y) / 2 + y * 100  // 调整控制点的垂直偏移
-          };
-
-          // 创建二次贝塞尔曲线
-          const curve = new fabric.Path(`M ${startPoint.x} ${startPoint.y} Q ${midPoint.x} ${midPoint.y} ${endPoint.x} ${endPoint.y}`, {
-            fill: '',
-            stroke: line.stroke,
-            strokeWidth: line.strokeWidth
-          });
-
-          // 更新组
-          if (group.item(2)) {
-            group.remove(group.item(2));
-          }
-          group.add(curve);
-          line.set('visible', false);
-
-          // 更新箭头位置和角度
-          const tangentAngle = Math.atan2(
-            endPoint.y - midPoint.y,
-            endPoint.x - midPoint.x
-          ) * 180 / Math.PI;
-
-          arrowHead.set({
-            left: endPoint.x,
-            top: endPoint.y,
-            angle: tangentAngle + 90
-          });
-
-          group.setCoords();
-          return true;
-        }
-      }),
-      end: new fabric.Control({
-        positionHandler: function(dim, finalMatrix, fabricObject) {
-          // 终点控制点位置
-          const x = fabricObject.width / 2;  // 在线条终点
-          const y = 0;
-          return fabric.util.transformPoint(
-            new fabric.Point(x, y),
-            fabric.util.multiplyTransformMatrices(
-              fabricObject.canvas.viewportTransform,
-              fabricObject.calcTransformMatrix()
-            )
-          );
-        },
-        render: function(ctx, left, top, styleOverride, fabricObject) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(left, top, 6, 0, Math.PI * 2);
-          ctx.fillStyle = '#fff';
-          ctx.strokeStyle = '#0d6efd';
-          ctx.lineWidth = 2;
-          ctx.fill();
-          ctx.stroke();
-          ctx.restore();
-        },
-        actionHandler: function(eventData, transform, x, y) {
-          const line = transform.target.getObjects()[0] as fabric.Line;
-          const arrowHead = transform.target.getObjects()[1] as fabric.Triangle;
-          const newLength = Math.sqrt(x * x + y * y);
-          line.set({ x2: newLength });
-          arrowHead.set({ left: newLength });
-          transform.target.setCoords();
-          return true;
-        }
-      })
-    };
-
-    group.controls = controls;
 
     // 添加到画布并初始化
     this.canvas.add(group);
@@ -741,36 +626,33 @@ export class PaintingTools {
       angle: initialAngle
     });
 
-    // 更新箭头位置和角度的函数
-    const updateArrow = (endX: number, endY: number) => {
-      const dx = endX - group.left;
-      const dy = endY - group.top;
-      const length = Math.sqrt(dx * dx + dy * dy);
-      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-
-      line.set({
-        x2: length,
-        y2: 0
-      });
-
-      arrowHead.set({
-        left: length,
-        top: 0,
-        angle: 90
-      });
-
-      group.set({
-        angle: angle
-      });
-
-      group.setCoords();
-    };
-
     // 处理鼠标移动
     const moveHandler = (e: any) => {
       if (this.isDrawing && this.currentShape === group) {
         const pointer = this.canvas.getPointer(e.e);
-        updateArrow(pointer.x, pointer.y);
+        // @ts-ignore
+        const dx = pointer.x - group.left;
+        // @ts-ignore
+        const dy = pointer.y - group.top;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+        line.set({
+          x2: length,
+          y2: 0
+        });
+
+        arrowHead.set({
+          left: length,
+          top: 0,
+          angle: 90
+        });
+
+        group.set({
+          angle: angle
+        });
+
+        group.setCoords();
         this.canvas.requestRenderAll();
       }
     };
@@ -829,32 +711,41 @@ export class PaintingTools {
 
   // 处理鼠标滚轮事件
   private onMouseWheel(e: any) {
-    if (!this.hoveredShape) return
+    if(this.store.currentTool === 'brush') {
+      const delta = e.e.deltaY
+      e.e.preventDefault()
+      
+      let newWidth = this.canvas.freeDrawingBrush.width - (delta / 100)
+      newWidth = Math.max(0.5, Math.min(20, newWidth))
+      this.canvas.freeDrawingBrush.width = newWidth
+    } else {
+      if (!this.hoveredShape) return
 
-    const delta = e.e.deltaY
-    e.e.preventDefault()
+      const delta = e.e.deltaY
+      e.e.preventDefault()
 
-    if (this.hoveredShape instanceof fabric.Group) {
-      // 箭头组
-      const line = this.hoveredShape.getObjects()[0] as fabric.Line;
-      const arrowHead = this.hoveredShape.getObjects()[1] as fabric.Triangle;
+      if (this.hoveredShape instanceof fabric.Group) {
+        // 箭头组
+        const line = this.hoveredShape.getObjects()[0] as fabric.Line;
+        const arrowHead = this.hoveredShape.getObjects()[1] as fabric.Triangle;
+        // @ts-ignore
+        let newWidth = line.strokeWidth - (delta / 100);
+        newWidth = Math.max(0.5, Math.min(20, newWidth));
 
-      let newWidth = line.strokeWidth - (delta / 100);
-      newWidth = Math.max(0.5, Math.min(20, newWidth));
+        line.set('strokeWidth', newWidth);
+        arrowHead.set({
+          strokeWidth: newWidth,
+          fill: line.stroke  // 保持填充色与线条颜色一致
+        });
 
-      line.set('strokeWidth', newWidth);
-      arrowHead.set({
-        strokeWidth: newWidth,
-        fill: line.stroke  // 保持填充色与线条颜色一致
-      });
-
-      this.canvas.requestRenderAll();
-    } else if ('strokeWidth' in this.hoveredShape) {
-      // 其他形状
-      let newWidth = this.hoveredShape.strokeWidth - (delta / 100);
-      newWidth = Math.max(0.5, Math.min(20, newWidth));
-      this.hoveredShape.set('strokeWidth', newWidth);
-      this.canvas.requestRenderAll();
+        this.canvas.requestRenderAll();
+      } else if ('strokeWidth' in this.hoveredShape) {
+        // 其他形状
+        let newWidth = this.hoveredShape.strokeWidth - (delta / 100);
+        newWidth = Math.max(0.5, Math.min(20, newWidth));
+        this.hoveredShape.set('strokeWidth', newWidth);
+        this.canvas.requestRenderAll();
+      }
     }
   }
   // 添加公共的清理方法
@@ -862,5 +753,49 @@ export class PaintingTools {
     // 移除键盘事件监听
     document.removeEventListener('keydown', this.boundHandleKeyDown)
     // 可以添加其他需要清理的内容
+  }
+
+  // 添加设置颜色的方法
+  setColor(color: string) {
+    this.store.currentColor = color
+    
+    // 如果当前是画笔模式,更新画笔颜色
+    if(this.store.currentTool === 'brush') {
+      this.canvas.freeDrawingBrush.color = color
+    }
+    
+    // 如果有选中的对象，更新其颜色
+    const activeObject = this.canvas.getActiveObject()
+    if (activeObject) {
+      if (activeObject instanceof fabric.Group) {
+        // 如果是箭头（Group），需要更新所有子对象
+        const objects = activeObject.getObjects()
+        objects.forEach((obj: any) => {
+          if (obj instanceof fabric.Line) {
+            obj.set({
+              stroke: color
+            })
+          } else if (obj instanceof fabric.Triangle) {
+            obj.set({
+              fill: color,
+              stroke: color
+            })
+          }
+        })
+      } else {
+        // 其他形状
+        activeObject.set({
+          stroke: color
+        })
+      }
+      this.canvas.requestRenderAll()
+    }
+  }
+
+  // 添加画笔宽度调整方法
+  setBrushWidth(width: number) {
+    if(this.store.currentTool === 'brush') {
+      this.canvas.freeDrawingBrush.width = width
+    }
   }
 }

@@ -5,9 +5,15 @@ import {onMounted, onUnmounted, Ref, ref, UnwrapRef} from "vue";
 import {invoke} from "@tauri-apps/api/core";
 import {emit, listen} from "@tauri-apps/api/event";
 import {copyImage} from "@/windows/method.ts";
-import { fabric } from 'fabric'
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-import { PaintingTools } from '@/windows/painting'
+import {fabric} from 'fabric'
+import {writeText} from '@tauri-apps/plugin-clipboard-manager';
+import {PaintingTools} from '@/windows/painting'
+import {PhysicalPosition} from '@tauri-apps/api/window'
+
+interface OcrItem {
+  text: string;
+  box: number[][];
+}
 
 const NewWindows = new Windows()
 // 从url中获取截图路径?path=' + result.path,
@@ -28,7 +34,7 @@ const image_ocr: any = ref([])
 const is_ocr: Ref<UnwrapRef<boolean>, UnwrapRef<boolean> | boolean> = ref(false)
 // 用于跟踪菜单状态
 
-let menuBounds = {x: 0, y: 0, width: 50, height: 138};
+let menuBounds = {x: 0, y: 0, width: 50, height: 220};
 
 const win = new Windows()
 
@@ -42,6 +48,9 @@ function resize(width: number, height: number) {
 function getSize() {
   return win.getWinSize(label)
 }
+
+// 存储原始 OCR 结果
+const originalOcrData = ref<{ code: any; data: any[] } | null>(null)
 
 const ocr = async () => {
   if (image_path.value === '' || image_path.value === null) {
@@ -59,13 +68,23 @@ const ocr = async () => {
     const ocrData = Array.isArray(parsedResult) ? parsedResult[0] : parsedResult;
 
     if (ocrData && ocrData.code === 100 && Array.isArray(ocrData.data)) {
-      console.log('处理后的数据:', ocrData);
-      image_ocr.value = ocrData;  // 保存处理后的对象
-      is_ocr.value = true;
+      console.log('OCR completed, data:', ocrData)
+      image_ocr.value = ocrData
+      is_ocr.value = true
+      originalOcrData.value = null
+      isTranslated.value = false
+      await emit('translationStatus', false)
 
-      const size = await getSize();
+      // OCR 成功后发送事件切换到取消绘图状态并禁用工具栏
+      await emit('toolbar-tool-change', {
+        tool: null,  // null 表示取消绘图状态
+        targetLabel: label,
+        disableTools: true  // 添加标志表示禁用工具
+      })
+
+      const size = await getSize()
       if (size !== null) {
-        resize(size.width + 300, size.height);
+        resize(size.width + 300, size.height)
       }
     } else {
       console.error('数据格式不正确:', ocrData);
@@ -76,34 +95,106 @@ const ocr = async () => {
   }
 };
 
-// 监听copyImage
-listen("ocrImage", async () => {
-  // if (event.payload === null) {
-  //   path.value = image_path.value;
-  //   return;
-  // } else {
-  //   path.value = event.payload;
-  // }
-  await ocr();
-});
+// 取消 OCR 时重新启用工具栏
+listen("ocrImage", async (event) => {
+  if (event.payload === null) {
+    is_ocr.value = false
+    image_ocr.value = []
+    // 恢复原始窗口大小
+    const size = await getSize()
+    if (size !== null) {
+      resize(size.width - 300, size.height)
+    }
+    // 重新启用工具栏
+    await emit('toolbar-tool-change', {
+      tool: null,  // 保持取消绘图状态
+      targetLabel: label,
+      disableTools: false  // 重新启用工具
+    })
+  } else {
+    await ocr()
+  }
+})
+
+// 添加翻译状态变量
+const isTranslated = ref(false)
+
+// 监听翻译事件
+listen("translateText", async () => {
+  if (image_ocr.value && image_ocr.value.data) {
+    // 在翻译前，确保保存完整的原始数据结构
+    if (!originalOcrData.value) {
+      console.log('Saving original OCR data before translation:', image_ocr.value)
+      // 保存完整的数据结构
+      originalOcrData.value = {
+        code: image_ocr.value.code,
+        data: image_ocr.value.data.map((item: OcrItem) => ({
+          text: item.text,
+          box: [...item.box]  // 确保复制所有必要的属性
+        }))
+      }
+    }
+
+    // 添加翻译
+    image_ocr.value.data = image_ocr.value.data.map((item: any) => ({
+      ...item,
+      text: item.text + ' 已翻译'
+    }))
+    isTranslated.value = true
+    await emit('translationStatus', true)
+  }
+})
+
+// 监听取消翻译事件
+listen("cancelTranslate", async () => {
+  console.log('Restoring original OCR data:', originalOcrData.value)
+  if (originalOcrData.value) {
+    // 完全替换为原始数据
+    image_ocr.value = {
+      code: originalOcrData.value.code,
+      data: originalOcrData.value.data.map((item: OcrItem) => ({
+        text: item.text,
+        box: [...item.box]
+      }))
+    }
+
+    // 清空原始数据
+    originalOcrData.value = null
+    isTranslated.value = false
+    await emit('translationStatus', false)
+  }
+})
 
 async function CreateContextMenu(event: any) {
-  // 禁用默认右键菜单
   event.preventDefault();
+  // 检查是否有选中的文本
+  const selection = window.getSelection();
+  if (selection && selection.toString().trim() !== '') {
+    // 如果有选中的文本，直接复制并阻止默认菜单
+    event.preventDefault();
+    try {
+      await writeText(selection.toString());
+      await emit('show-alert', {
+        type: 'success',
+        message: '复制成功'
+      });
+    } catch (error) {
+      console.error('Failed to copy text:', error);
+      await emit('show-alert', {
+        type: 'error',
+        message: '复制失败'
+      });
+    }
+    return;
+  }
 
+  // 如果没有选中的文本，则显示菜单
   // 获取点击位置
   const x = event.screenX - 20;
   const y = event.screenY - 10;
 
-  // 保存菜单位置信息
-  // menuBounds = {
-  //   x: x,
-  //   y: y,
-  //   width: 50,
-  //   height: 200
-  // };
-  // /#/fixed_menu 给url添加参数,image_path
-  const urlWithParams = `/#/contextmenu?path=${image_path.value}&label=${label}`;
+  // 添加翻译状态到 URL 参数
+  const urlWithParams = `/#/contextmenu?path=${image_path.value}&label=${label}&is_ocr=${is_ocr.value}&is_translated=${isTranslated.value}`;
   console.log(urlWithParams)
 
   const options = {
@@ -131,7 +222,6 @@ async function CreateContextMenu(event: any) {
   };
 
   await win.createWin(options, {x: event.x, y: event.y});
-
 }
 
 // 监听右键点击事件启动菜单,启动后任何点击事件都会关闭菜单
@@ -207,14 +297,14 @@ onMounted(() => {
       label: 'Toolbar',
       url: `/#/painting-toolbar?sourceLabel=${label}`,
       title: 'Toolbar',
-      width: 280,
-      height: 48,
+      width: 365,
+      height: 45,
       decorations: false,
       transparent: true,
       alwaysOnTop: true,
       shadow: false,
       x: window.screenX,
-      y: window.screenY + img.height + 5,
+      y: window.screenY + img.height + 2,
     }, {parent: label});
 
     // 监听窗口关闭事件
@@ -230,12 +320,115 @@ onMounted(() => {
 
 });
 
+// 添加双击复制功能
 const copyText = async (text: string) => {
   try {
-    await writeText(text);
-    console.log('文本已复制');
-  } catch (err) {
-    console.error('复制失败:', err);
+    await writeText(text)
+    // 发送成功提示事件
+    await emit('show-alert', {
+      type: 'success',
+      message: '复制成功'
+    })
+  } catch (error) {
+    console.error('Failed to copy text:', error)
+    await emit('show-alert', {
+      type: 'error',
+      message: '复制失败'
+    })
+  }
+}
+
+const isDragging = ref(false)
+const dragStart = ref({x: 0, y: 0})
+const initialPosition = ref({x: 0, y: 0})  // 添加初始窗口位置
+
+const startDrag = async (event: MouseEvent) => {
+  isDragging.value = true
+  dragStart.value = {x: event.screenX, y: event.screenY}
+
+  // 保存开始拖动时的窗口位置
+  const currentWindow = await NewWindows.getWin(label)
+  if (currentWindow) {
+    const position = await currentWindow.outerPosition()
+    initialPosition.value = {x: position.x, y: position.y}
+  }
+}
+
+const stopDrag = () => {
+  if (isDragging.value) {
+    isDragging.value = false
+    dragStart.value = {x: 0, y: 0}
+  }
+}
+
+const isPaintingMode = ref(false)
+
+const drag = async (event: MouseEvent) => {
+  if (isDragging.value && !isPaintingMode.value) {
+    const dx = event.screenX - dragStart.value.x
+    const dy = event.screenY - dragStart.value.y
+
+    const currentWindow = await NewWindows.getWin(label)
+    const toolbarWindow = await NewWindows.getWin('Toolbar')
+
+    if (currentWindow) {
+      const newX = initialPosition.value.x + dx
+      const newY = initialPosition.value.y + dy
+
+      // 移动主窗口
+      await currentWindow.setPosition(new PhysicalPosition(newX, newY))
+
+      // 移动工具栏窗口
+      if (toolbarWindow) {
+        await toolbarWindow.setPosition(new PhysicalPosition(
+            newX,
+            newY + (await currentWindow.outerSize()).height + 5
+        ))
+      }
+    }
+  }
+}
+
+listen('toolbar-tool-change', async (event: any) => {
+  const {tool} = event.payload
+  isPaintingMode.value = tool !== null && tool !== undefined
+  console.log('Drawing mode:', isPaintingMode.value)  // 添加日志以便调试
+})
+
+// 在 script setup 中添加
+const showAlert = ref(false)
+const alertMessage = ref('')
+
+// 监听显示提示事件
+listen('show-alert', (event: any) => {
+  alertMessage.value = event.payload.message
+  showAlert.value = true
+  setTimeout(() => {
+    showAlert.value = false
+  }, 2000)
+})
+
+// 在 script 部分添加计算字体大小的函数
+const calculateFontSize = (item: OcrItem) => {
+  const boxWidth = Math.round(item.box[2][0] - item.box[0][0]);
+  const boxHeight = Math.round(item.box[2][1] - item.box[0][1]);
+  const textLength = item.text.length;
+
+  // 根据宽度和高度计算最大字体大小
+  const widthBasedSize = boxWidth / (textLength * 0.55);  // 调整系数以更好地适应宽度
+  const heightBasedSize = boxHeight * 0.9;  // 调整系数以更好地适应高度
+
+  // 取两者中较小的值
+  return Math.min(widthBasedSize, heightBasedSize);
+};
+
+// 添加滚轮事件处理函数
+const handleWheel = (event: WheelEvent) => {
+  const ocrOverlay = document.querySelector('.ocr-overlay') as HTMLElement;
+  if (ocrOverlay) {
+    // 水平滚动
+    ocrOverlay.scrollLeft += event.deltaY;
+    event.preventDefault();  // 阻止默认的垂直滚动行为
   }
 };
 
@@ -243,41 +436,78 @@ const copyText = async (text: string) => {
 
 
 <template>
-  <div class="screenshot-container">
-    <!-- Canvas 始终示 -->
+  <div
+      class="screenshot-container"
+      @mousedown="startDrag"
+      @mouseup="stopDrag"
+      @mousemove="drag"
+      @mouseleave="stopDrag"
+  >
+    <!-- Canvas 始终显示 -->
     <canvas id="c"></canvas>
 
     <!-- OCR 结果显示 -->
     <div class="content" v-if="is_ocr">
       <!-- OCR 文本覆盖层 -->
-      <div class="ocr-overlay">
+      <div class="ocr-overlay" @mousedown.stop @wheel="handleWheel">
         <div
             v-for="(item, index) in image_ocr?.data"
             :key="index"
             class="ocr-text"
             :style="{
-            position: 'absolute',
-            left: `${Math.round(item.box[0][0])}px`,
-            top: `${Math.round(item.box[0][1])}px`,
-            width: `${Math.round(item.box[2][0] - item.box[0][0])}px`,
-            height: `${Math.round(item.box[2][1] - item.box[0][1])}px`,
-            lineHeight: `${Math.round(item.box[2][1] - item.box[0][1])}px`,
-            fontSize: `${Math.round((item.box[2][1] - item.box[0][1]) * 0.9)}px`,
-          }"
-            @dblclick="() => copyText(item.text)"
+              left: `${Math.round(item.box[0][0])}px`,
+              top: `${Math.round(item.box[0][1])}px`,
+              width: `${Math.round(item.box[2][0] - item.box[0][0])}px`,
+              height: `${Math.round(item.box[2][1] - item.box[0][1])}px`,
+              fontSize: `${calculateFontSize(item)}px`,
+              lineHeight: `${Math.round(item.box[2][1] - item.box[0][1])}px`,
+              whiteSpace: 'nowrap',
+              overflow: 'visible',
+              textOverflow: 'clip',
+              textAlign: 'left',
+            }"
+            @dblclick="copyText(item.text)"
         >
           {{ item.text }}
         </div>
       </div>
 
       <!-- 右侧文本列表 -->
-      <div class="link">
-        <div v-for="(item, index) in image_ocr?.data" :key="index" class="text-item">
-          <span class="line-number">{{ index + 1 }}</span>
-          <p>{{ item.text }}</p>
+      <div class="w-[300px] h-full box-border overflow-y-auto bg-neutral-700">
+        <div v-for="(item, index) in image_ocr?.data"
+             :key="index"
+             class="flex items-start m-2 p-1 hover:bg-white/10 select-none">
+          <span
+              class="min-w-[24px] mr-2 text-gray-500 text-right select-none"
+          >{{ index + 1 }}</span>
+          <div
+              class="flex-1 break-all cursor-copy select-none"
+              @dblclick="copyText(item.text)"
+          >
+            {{ item.text }}
+          </div>
         </div>
       </div>
     </div>
+  </div>
+
+  <div
+      v-if="showAlert"
+      role="alert"
+      class="alert alert-success fixed top-4 w-36 right-0  z-50"
+  >
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        class="h-6 w-6 shrink-0 stroke-current"
+        fill="none"
+        viewBox="0 0 24 24">
+      <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <span>{{ alertMessage }}</span>
   </div>
 </template>
 
@@ -289,6 +519,27 @@ const copyText = async (text: string) => {
   position: fixed;
   top: 0;
   left: 0;
+  box-sizing: border-box;
+  cursor: move; /* 鼠标悬停时显示为可拖动 */
+}
+
+/* 添加伪元素来创建虚化边框效果 */
+.screenshot-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15); /* 更淡的白色边框 */
+  transition: box-shadow 0.3s ease;
+}
+
+/* 当容器被选中或悬停时的效果 */
+.screenshot-container:hover::after,
+.screenshot-container:focus-within::after {
+  box-shadow: inset 0 0 0 1px rgba(33, 150, 243, 0.2), /* 非常淡的蓝色边框 */ 0 0 20px rgba(33, 150, 243, 0.1); /* 柔和的外发光效果 */
 }
 
 #c {
@@ -313,46 +564,36 @@ const copyText = async (text: string) => {
   position: relative;
   width: calc(100% - 300px);
   height: 100%;
+  pointer-events: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
 }
 
 .ocr-text {
   background: transparent;
-  color: transparent;  /* 默认文字透明 */
+  color: transparent;
   cursor: text;
   user-select: text;
   pointer-events: auto;
   position: absolute;
-  font-size: 14px;
   padding: 0;
   margin: 0;
-  white-space: nowrap;
   z-index: 1000;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+  text-align: left;
 }
 
 .ocr-text:hover {
-  background: rgba(255, 255, 0, 0.71);
-  border: 1px solid rgb(120, 246, 150);
-  color: rgb(0, 92, 253);  /* 悬浮时文字显示为半透明黑色 */
-}
-
-.ocr-text::selection,
-.ocr-text *::selection {  /* 确保字内容也能被选中 */
-  background: rgba(0, 123, 255, 0.3);
-  color: #000;  /* 选中时文字显示为黑色 */
-}
-
-/* 右侧文本列表 */
-.link {
-  width: 300px;
-  height: 100%;
-  color: #ffffff;
-  background: rgb(43, 43, 43);
-  padding: 10px;
-  box-sizing: border-box;
-  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.8);
+  outline: 2px solid rgba(33, 150, 243, 0.5);
+  color: rgb(255, 255, 255);
+  /*text-shadow: 0 0 1px white, 0 0 1px white, 0 0 1px white, 0 0 1px white;  悬停时添加白色边缘效果*/
 }
 
 /* 滚动条样式 */
@@ -366,41 +607,6 @@ const copyText = async (text: string) => {
   border-radius: 5px;
 }
 
-/* 文本项容器 */
-.text-item {
-  display: flex;
-  align-items: flex-start;
-  margin: 8px 0;
-  padding: 5px;
-}
 
-.text-item:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
 
-/* 行号样式 */
-.line-number {
-  min-width: 24px;
-  margin-right: 8px;
-  color: #666;
-  text-align: right;
-  user-select: none;
-}
-
-/* 文本内容样式 */
-.text-item p {
-  margin: 0;
-  flex: 1;
-  text-align: left;
-}
-
-/* 移除之前的 p 样式 */
-.link p {
-  margin: 0;
-  padding: 0;
-}
-
-.link p:hover {
-  background: none;
-}
 </style>
