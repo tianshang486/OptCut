@@ -9,10 +9,10 @@ pub fn get_migrations() -> Vec<Migration> {
                   
                   CREATE TABLE IF NOT EXISTS shortcutKey (
                       id INTEGER PRIMARY KEY AUTOINCREMENT,
-                      shortcutKey TEXT NOT NULL ,
+                      shortcut_key TEXT NOT NULL ,
                       function TEXT NOT NULL UNIQUE
                   );
-                  INSERT INTO shortcutKey (shortcutKey, function) VALUES
+                  INSERT INTO shortcutKey (shortcut_key, function) VALUES
                       ('ctrl+alt+q', 'default'),
                       ('ctrl+alt+w', 'fixed_copy'),
                       ('ctrl+alt+e', 'fixed_ocr');

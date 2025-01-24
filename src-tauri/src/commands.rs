@@ -5,8 +5,8 @@ use mouse_position::mouse_position::Mouse;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use xcap::{image, Monitor};
-
 use crate::utils::{color, read_conf::read_conf};
+use crate::utils::sql::{get_shortcut_keys, init_db, query_tables};
 
 #[derive(Serialize, Deserialize)]
 struct Struct {
@@ -237,4 +237,30 @@ pub async fn read_config() -> Result<String, String> {
         .await
         .map(|config| serde_json::to_string(&config).unwrap_or_default())
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn query_database_info() -> Result<String, String> {
+    let pool = init_db().await?;
+    println!("Database initialized");
+    // 查询所有表
+    let tables = query_tables(&pool).await?;
+
+    // 查询快捷键表数据
+    let shortcut_keys = get_shortcut_keys(&pool).await?;
+
+    // 将结果格式化为字符串
+    let tables_str = tables.join(", ");
+    let shortcuts_str = shortcut_keys
+        .iter()
+        .map(|sk| format!("{}: {}", sk.shortcut_key, sk.function))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let result = format!("Tables: [{}], Shortcuts: [{}]", tables_str, shortcuts_str);
+
+    // 打印结果
+    println!("{}", result);
+
+    Ok(result.to_string())
 }

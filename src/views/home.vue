@@ -40,6 +40,12 @@ async function ps_ocr_pd() {
   console.log(result);
 
 }
+async function query_database_info() {
+  const result = await invoke("query_database_info", );
+  console.log(result);
+
+}
+
 
 // 弹窗提升配置文件
 // @ts-ignore
@@ -158,6 +164,10 @@ const logWindowPool = () => {
         </button>
         <button class="btn btn-info" @click="ps_ocr_pd">
           <span class="button-title">测试paddocr</span>
+          <!--          <span class="button-desc">清理临时图片文件</span>-->
+        </button>
+        <button class="btn btn-info" @click="query_database_info">
+          <span class="button-title">测试rust数据查询</span>
           <!--          <span class="button-desc">清理临时图片文件</span>-->
         </button>
 

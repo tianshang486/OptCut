@@ -1,16 +1,21 @@
-use crate::utils::config::{Config, CONFIG};
+use crate::utils::sql::{init_db, get_shortcut_keys};
 use serde_json::json;
-use std::sync::Arc;
 
 pub async fn read_conf() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    let config: &Arc<Config> = &*CONFIG;
-    // 如果json的版本号不等于APP_VERSION，则更新配置文件
+    let pool = init_db().await?;
+
+    // 读取快捷键配置
+    let shortcut_keys = get_shortcut_keys(&pool).await?;
+
+    // 构建 JSON 结构
     let json_value = json!({
-        "shortcut_key": config.shortcut_key,
-        "database": config.database,
-        "server": config.server
+        "shortcut_key": {
+            "default": shortcut_keys.iter().find(|k| k.function == "default").map(|k| k.shortcut_key.as_str()).unwrap_or("ctrl+alt+q"),
+            "fixed_copy": shortcut_keys.iter().find(|k| k.function == "fixed_copy").map(|k| k.shortcut_key.as_str()).unwrap_or("ctrl+alt+w"),
+            "fixed_ocr": shortcut_keys.iter().find(|k| k.function == "fixed_ocr").map(|k| k.shortcut_key.as_str()).unwrap_or("ctrl+alt+e"),
+        }
     });
 
-    println!("配置信息: {}", json_value);
+    println!("{:?}", json_value);
     Ok(json_value)
 }

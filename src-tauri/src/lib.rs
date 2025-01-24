@@ -2,9 +2,10 @@
 mod commands;
 mod migrations;
 mod utils;
-
+use crate::utils::sql::{init_db, query_tables,};
 use crate::commands::{
     capture_screen_fixed, capture_screen_one, delete_temp_file, get_color_at, ps_ocr, read_config,ps_ocr_pd
+    ,query_database_info
 };
 use tauri::{Emitter, Manager};
 use tauri::tray::TrayIconBuilder;
@@ -44,6 +45,7 @@ pub fn run() {
             get_color_at,
             read_config,
             ps_ocr_pd,
+            query_database_info,
         ])
         // 阻止默认关闭事件,弹窗提示是否关闭窗口
         .on_window_event(|window, event| match event {
@@ -86,7 +88,7 @@ pub fn run() {
 
                 handle.plugin(
                     tauri_plugin_global_shortcut::Builder::new()
-                        .with_shortcuts(["ctrl+alt+q", "ctrl+alt+e"])?
+                        .with_shortcuts(["ctrl+alt+q","ctrl+alt+w", "ctrl+alt+e"])?
                         .with_handler(|app, shortcut, event| {
                             if event.state == ShortcutState::Pressed {
                                 // 三个按键的组合: Ctrl+Alt+Shift+Q
@@ -121,3 +123,4 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
