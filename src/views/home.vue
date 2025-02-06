@@ -64,7 +64,21 @@ const logWindowPool = () => {
   const windowPool = queryAuth('windowPool');
   console.log(windowPool);
 }
+import {registerShortcutsMain} from "@/windows/ShortcutRegistration";
+import {onMounted} from "vue";
+onMounted(async () => {
 
+  try {
+
+    await registerShortcutsMain();
+
+  } catch (error) {
+
+    console.error('Failed to register shortcuts after page reload:', error);
+
+  }
+
+});
 </script>
 
 <template>
@@ -168,6 +182,10 @@ const logWindowPool = () => {
         </button>
         <button class="btn btn-info" @click="query_database_info">
           <span class="button-title">测试rust数据查询</span>
+          <!--          <span class="button-desc">清理临时图片文件</span>-->
+        </button>
+        <button class="btn btn-info" @click="logWindowPool">
+          <span class="button-title">查询窗口池</span>
           <!--          <span class="button-desc">清理临时图片文件</span>-->
         </button>
 

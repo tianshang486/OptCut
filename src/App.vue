@@ -1,15 +1,39 @@
 <script setup lang="ts">
-//@ts-ignore
-const handleChangeTheme = () => {
-  const html = document.getElementsByTagName('html')[0]
-  const darkTheme = html.dataset.theme
 
-  if (darkTheme === 'dark') {
-    html.dataset.theme = 'light'
-  } else {
-    html.dataset.theme = 'dark'
+//@ts-ignore
+import {onMounted, onUnmounted} from "vue";
+
+// const handleChangeTheme = () => {
+//   const html = document.getElementsByTagName('html')[0]
+//   const darkTheme = html.dataset.theme
+//
+//   if (darkTheme === 'dark') {
+//     html.dataset.theme = 'light'
+//   } else {
+//     html.dataset.theme = 'dark'
+//   }
+// }
+const handleKeyDown = (event: KeyboardEvent) => {
+  // 检测是否按下了 Ctrl + R
+  if ((event.ctrlKey || event.metaKey) && event.key === 'r') {
+    event.preventDefault(); // 阻止默认刷新行为
+    console.log('Ctrl + R 刷新已被禁用');
   }
-}
+};
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown);
+});
+
+// 禁用默认右键菜单
+document.addEventListener('contextmenu', (event) => {
+  event.preventDefault();
+});
+
 </script>
 
 <template>

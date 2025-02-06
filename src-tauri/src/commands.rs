@@ -7,7 +7,7 @@ use serde_json::json;
 use xcap::{image, Monitor};
 use crate::utils::{color, read_conf::read_conf};
 use crate::utils::sql::{get_shortcut_keys, init_db, query_tables};
-
+// use paddleocr::Ppocr;
 #[derive(Serialize, Deserialize)]
 struct Struct {
     image_path: String,
@@ -32,7 +32,7 @@ pub fn get_color_at(x: i32, y: i32) -> Result<String, String> {
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn ps_ocr(image_path: &str) -> Result<String, String> {
-    println!("image_path: {},开始OCR识别", image_path);
+    println!("image_path: {},开始R_OCR识别", image_path);
 
     // 根据平台选择正确的可执行文件路径
     #[cfg(target_os = "windows")]
@@ -43,7 +43,7 @@ pub async fn ps_ocr(image_path: &str) -> Result<String, String> {
     let exe_path = "tools/RapidOCR-json_v0.2.0/RapidOCR-json";
 
     // 使用平台无关的路径分隔符
-    let models_path = std::path::Path::new("tools")
+    let models_path = Path::new("tools")
         .join("RapidOCR-json_v0.2.0")
         .join("models");
 
@@ -76,6 +76,7 @@ pub async fn ps_ocr(image_path: &str) -> Result<String, String> {
     // 转换为json格式
     let result: serde_json::Value = serde_json::from_str(&result).unwrap();
     // 输出json格式结果
+    print!("{:?}", result);
     Ok(result.to_string())
 }
 
@@ -94,25 +95,49 @@ fn normalized(filename: &str) -> String {
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn ps_ocr_pd(image_path: &str) -> Result<String, String> {
-    println!("image_path: {},开始OCR识别", image_path);
-    // 根据平台选择正确的可执行文件路径src-tauri/tools/PaddleOCR-json_v1.4.1/PaddleOCR-json.exe
+    println!("image_path: {},开始PD_OCR识别", image_path);
+
     #[cfg(target_os = "windows")]
-    let mut p = paddleocr::Ppocr::new(
-        PathBuf::from("tools\\PaddleOCR-json_v1.4.1\\PaddleOCR-json.exe"), // path to binary
-        Default::default(), // language config_path, default `zh_CN`
-    )
-    .unwrap(); // initialize
+    let exe_path = "tools\\PaddleOCR-json_v1.4.1\\PaddleOCR-json.exe";
+    #[cfg(target_os = "macos")]
+    let exe_path = "tools/PaddleOCR-json_v1.4.1/PaddleOCR-json";
+    #[cfg(target_os = "linux")]
+    let exe_path = "tools/PaddleOCR-json_v1.4.1/PaddleOCR-json";
 
-    let now = std::time::Instant::now(); // benchmark
-    // OCR files
-    let ocr_result = p.ocr(Path::new(image_path).into()).unwrap();
-    let decoded_result = serde_json::from_str::<serde_json::Value>(&ocr_result)
-        .map_err(|e| format!("解析OCR结果失败: {}", e))?;
+    #[cfg(target_os = "windows")]
+    let mut command = Command::new(exe_path);
+    #[cfg(target_os = "windows")]
+    command.creation_flags(0x08000000); // CREATE_NO_WINDOW flag
+    #[cfg(not(target_os = "windows"))]
+    let mut command = Command::new(exe_path);
+    // 使用平台无关的路径分隔符
+    let models_path = Path::new("tools")
+        .join("PaddleOCR-json_v1.4.1")
+        .join("models")
+        .join("config_chinese.txt");
+    let output = command
+        .arg("--config_path")
+        .arg(models_path)
+        .arg("--image_path")
+        .arg(image_path)
+        .output()
+        .map_err(|e| format!("执行OCR命令失败: {}", e))?;
 
-    println!("Elapsed: {:.2?}", now.elapsed());
-    // 直接返回解析后的JSON字符串
+    // 获取输出并转换为字符串
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    // 按换行符分割，获取JSON结果（最后一行）
+    let json_line = stdout.lines()
+        .last()
+        .unwrap_or_default();
+
+    // 解析JSON并处理Unicode编码
+    let decoded_result: serde_json::Value = serde_json::from_str(json_line)
+        .map_err(|e| format!("解析JSON失败: {}", e))?;
+
+    print!("{:?}", decoded_result);
     Ok(decoded_result.to_string())
 }
+
 #[tauri::command(rename_all = "snake_case")]
 pub fn capture_screen_one() -> Result<String, String> {
     let my_struct = Struct::new();

@@ -46,7 +46,7 @@ const menuItems = [
     handler: async () => {
       const img = await readFileImage(image_path.value)
       ocr(img)
-      NewWindows.closeWin('contextmenu')
+      await NewWindows.closeWin('contextmenu')
     },
     disabled: is_ocr.value // OCR 后禁用
   },
@@ -62,18 +62,18 @@ const menuItems = [
   { 
     label: '翻译', 
     handler: async () => {
-      emit('translateText', '已翻译')
+      await emit('translateText', '已翻译')
       is_translated.value = true
-      NewWindows.closeWin('contextmenu')
+      await NewWindows.closeWin('contextmenu')
     },
     disabled: !is_ocr.value || is_translated.value // 未 OCR 或已翻译时禁用
   },
   { 
     label: '取消翻译', 
     handler: async () => {
-      emit('cancelTranslate')
+      await emit('cancelTranslate')
       is_translated.value = false
-      NewWindows.closeWin('contextmenu')
+      await NewWindows.closeWin('contextmenu')
     },
     disabled: !is_ocr.value || !is_translated.value // 未 OCR 或未翻译时禁用
   },
@@ -117,7 +117,7 @@ listen('translationStatus', (event: any) => {
 listen('translateText', async (event: any) => {
   is_translated.value = true
   console.log('Translation completed, status:', is_translated.value) // 添加日志
-  emit('translateText', event.payload)
+  await emit('translateText', event.payload)
 })
 
 // 使用getWin 获取父窗口是否存在,不存在则关闭子窗口
@@ -166,9 +166,19 @@ const copyImage = async (path: string) => {
 
 // 复制并关闭窗口
 const copyAndClose = async (path: string) => {
-  await copyImage(path);
-  await NewWindows.closeWin(label.value)
-  await NewWindows.closeWin('contextmenu')
+  try {
+    // 调用同步的 copyImage 函数
+    copyImage(path);
+
+    // 等待第一个窗口关闭
+    await NewWindows.closeWin(label.value);
+
+    // 等待第二个窗口关闭
+    await NewWindows.closeWin('contextmenu');
+  } catch (error) {
+    console.error("Error occurred during copy and close operations:", error);
+    // 可以在这里处理错误，例如重新尝试或记录日志
+  }
 };
 const handleSelect = (index: string) => {
   const item = menuItems.find(item => item.label === index)

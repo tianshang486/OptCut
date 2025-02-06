@@ -1,7 +1,7 @@
 import {createApp} from "vue";
 import App from "./App.vue";
 import router from './router/index';
-import {listenShortcuts, listenFixedWindows} from "@/windows/ShortcutRegistration";
+import {listenShortcuts,  listenFixedWindows} from "@/windows/ShortcutRegistration";
 import pinia from './stores'  //引入
 import './app.css';
 
@@ -14,13 +14,13 @@ app.use(router).use(pinia).mount("#app");
 // 将异步操作包装在立即执行的异步函数中
 (async () => {
     try {
-        await registerShortcuts();
+        await registerShortcutsAll();
     } catch (error) {
         console.error('Failed to register shortcuts:', error);
     }
 })();
 
-async function registerShortcuts() {
+async function registerShortcutsAll() {
     await listenShortcuts();
     await listenFixedWindows();
 }

@@ -59,7 +59,8 @@ const ocr = async () => {
   }
 
   try {
-    const result: any = await invoke("ps_ocr", {image_path: image_path.value});
+    // const result: any = await invoke("ps_ocr", {image_path: image_path.value});
+    const result: any = await invoke("ps_ocr_pd", {image_path: image_path.value});
     console.log('原始OCR结果:', result);
 
     let parsedResult = typeof result === 'string' ? JSON.parse(result) : result;
@@ -277,7 +278,7 @@ onMounted(() => {
     paintingTools = new PaintingTools(canvas)
 
     // 修改这里：使用 fabric.Image.fromURL 替代 FabricImage.fromURL
-    await fabric.Image.fromURL(path, (fabricImg) => {
+    fabric.Image.fromURL(path, (fabricImg) => {
       fabricImg.set({
         left: 0,
         top: 0,
@@ -494,7 +495,7 @@ const handleWheel = (event: WheelEvent) => {
   <div
       v-if="showAlert"
       role="alert"
-      class="alert alert-success fixed top-4 w-36 right-0  z-50"
+      class="alert alert-success fixed top-0 w-36 right-0  z-50"
   >
     <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -590,7 +591,7 @@ const handleWheel = (event: WheelEvent) => {
 }
 
 .ocr-text:hover {
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.6);
   outline: 2px solid rgba(33, 150, 243, 0.5);
   color: rgb(255, 255, 255);
   /*text-shadow: 0 0 1px white, 0 0 1px white, 0 0 1px white, 0 0 1px white;  悬停时添加白色边缘效果*/

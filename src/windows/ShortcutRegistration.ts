@@ -2,16 +2,14 @@ import {captureScreenshot} from '@/windows/screenshot.ts'
 import {Windows} from '@/windows/create.ts'
 import {listen} from "@tauri-apps/api/event";
 import {updateAuth} from '@/windows/dbsql'
+import {isRegistered, register, ShortcutEvent} from "@tauri-apps/plugin-global-shortcut";
+import {invoke} from "@tauri-apps/api/core";
 
 const windows = new Windows();
-// // 读取快捷键配置
-// async function readShortcutConfig() {
-//     const config = invoke('read_config')
-//     console.log(config)
-//     return config
-// }
-//
-// // 注销快捷键
+// 读取快捷键配置
+
+
+// 注销快捷键
 // async function unregisterShortcuts(shortcut_key: string) {
 //     if (await isRegistered(shortcut_key)) {
 //         await unregister(shortcut_key);
@@ -20,55 +18,63 @@ const windows = new Windows();
 // }
 
 // 注册快捷键
-// async function registerShortcuts(shortcut_key: string, method: Function, controller: any = 'default') {
-//     try {
-//         // 如果已注册，先注销
-//         if (await isRegistered(shortcut_key)) {
-//             // await unregisterShortcuts(shortcut_key);
-//         } else {
-//
-//             // 重新注册快捷键，保持监听状态
-//             await register(shortcut_key, async (event: ShortcutEvent) => {
-//                 if (event.state === "Pressed") {
-//                     console.log('截图快捷键触发', shortcut_key);
-//                     try {
-//                         await method(controller);
-//                     } catch (error) {
-//                         console.error('执行快捷键功能时出错:', error);
-//                     }
-//                 }
-//             });
-//
-//             console.log('快捷键注册成功:', shortcut_key);
-//         }
-//     } catch (error) {
-//         console.error('注册快捷键失败:', error);
-//     }
-//
-// }
+export async function registerShortcuts(shortcut_key: string, method: Function, controller: any = 'default') {
+    try {
+        console.log('注册快捷键:', shortcut_key, )
+        // 如果已注册，返回报错信息,已被占用
+        if (await isRegistered(shortcut_key)) {
+            return { message: '快捷键已被占用' , code: 1 }
+        } else {
 
-// export async function registerShortcutsMain(controller: any = 'default') {
-//     try {
-//         const config = await JSON.parse(<string>await readShortcutConfig());
-//         console.log('读取到的快捷键配置:', config);
-//
-//         // 注册固定截图快捷键
-//         await registerShortcuts(
-//             config.shortcut_key.screenshot_fixed,
-//             captureScreenshot,
-//             'default'
-//         );
-//
-//         // 注册复制截图快捷键
-//         await registerShortcuts(
-//             config.shortcut_key.screenshot_copy,
-//             captureScreenshot,
-//             'fixed_copy'
-//         );
-//     } catch (error) {
-//         console.error('注册主快捷键失败:', error);
-//     }
-// }
+            // 重新注册快捷键，保持监听状态
+            await register(shortcut_key, async (event: ShortcutEvent) => {
+                if (event.state === "Pressed") {
+                    console.log('截图快捷键触发', shortcut_key);
+                    try {
+                        await method(controller);
+                    } catch (error) {
+                        console.error('执行快捷键功能时出错:', error);
+                    }
+                }
+            });
+
+            console.log('快捷键注册成功:', shortcut_key);
+            return { message: '快捷键注册成功', code: 0 }
+        }
+    } catch (error) {
+        console.error('注册快捷键失败:', error);
+        return { message: '注册快捷键失败', code: 2 }
+    }
+
+}
+
+async function readShortcutConfig() {
+    return invoke('read_config');
+}
+
+export async function registerShortcutsMain(controller: any = 'default') {
+    try {
+        const config = await JSON.parse(<string>await readShortcutConfig());
+        console.log('读取到的快捷键配置:', config);
+
+        // 注册固定截图快捷键
+        await registerShortcuts(
+            config.shortcut_key.default,
+            captureScreenshot,
+            'default'
+        );
+
+        // 注册复制截图快捷键
+        await registerShortcuts(
+            config.shortcut_key.fixed_copy,
+            captureScreenshot,
+            'fixed_copy'
+        );
+        console.log(controller, '注册快捷键成功');
+    } catch (error) {
+        console.error('注册主快捷键失败:', error);
+    }
+}
 
 // 快捷键执行截图
 async function captureScreenshotMain(controller: any = 'default') {
@@ -82,6 +88,7 @@ async function captureScreenshotMain(controller: any = 'default') {
         await captureScreenshot(controller);
     }
 }
+
 export async function listenShortcuts() {
     const windows = new Windows();
     await listen('screenshots', (event: any) => {

@@ -24,7 +24,7 @@ lto = true
 strip = true  # 自动从二进制文件去除符号信息.
 panic = "abort"
 codegen-units = 3
-opt-level = "s"
+opt-level = 3
 
 [profile.dev]
 codegen-units = 16
