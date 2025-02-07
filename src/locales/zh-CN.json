@@ -1,0 +1,16 @@
+{
+    "settings": {
+      "title": "系统设置",
+      "autoStart": "开机自启动",
+      "autoStartDescription": "启用后，系统将在开机时自动启动。",
+      "language": "界面语言",
+      "languageDescription": "选择系统界面显示的语言。",
+      "checkUpdates": "检查更新",
+      "updateStatus": {
+        "checking": "检查中...",
+        "latest": "当前已是最新版本。",
+        "newVersion": "发现新版本。"
+      },
+      "version": "当前版本"
+    }
+  }

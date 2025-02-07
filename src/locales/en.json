@@ -1,0 +1,16 @@
+{
+    "settings": {
+      "title": "System Settings",
+      "autoStart": "Auto Start",
+      "autoStartDescription": "Enable to start the system automatically on boot.",
+      "language": "Interface Language",
+      "languageDescription": "Choose the display language of the system.",
+      "checkUpdates": "Check for Updates",
+      "updateStatus": {
+        "checking": "Checking...",
+        "latest": "You are on the latest version.",
+        "newVersion": "A new version is available."
+      },
+      "version": "Current Version"
+    }
+  }
