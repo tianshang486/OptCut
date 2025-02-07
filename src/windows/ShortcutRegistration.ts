@@ -2,7 +2,7 @@ import {captureScreenshot} from '@/windows/screenshot.ts'
 import {Windows} from '@/windows/create.ts'
 import {listen} from "@tauri-apps/api/event";
 import {updateAuth} from '@/windows/dbsql'
-import {isRegistered, register, ShortcutEvent} from "@tauri-apps/plugin-global-shortcut";
+import {isRegistered, register, ShortcutEvent, unregister} from "@tauri-apps/plugin-global-shortcut";
 import {invoke} from "@tauri-apps/api/core";
 
 const windows = new Windows();
@@ -52,28 +52,64 @@ async function readShortcutConfig() {
     return invoke('read_config');
 }
 
-export async function registerShortcutsMain(controller: any = 'default') {
-    try {
-        const config = await JSON.parse(<string>await readShortcutConfig());
-        console.log('读取到的快捷键配置:', config);
-
-        // 注册固定截图快捷键
-        await registerShortcuts(
-            config.shortcut_key.default,
-            captureScreenshot,
-            'default'
-        );
-
-        // 注册复制截图快捷键
-        await registerShortcuts(
-            config.shortcut_key.fixed_copy,
-            captureScreenshot,
-            'fixed_copy'
-        );
-        console.log(controller, '注册快捷键成功');
-    } catch (error) {
-        console.error('注册主快捷键失败:', error);
+// 添加取消注册快捷键的函数
+async function unregisterShortcut(shortcut: string) {
+  try {
+    if (await isRegistered(shortcut)) {
+      await unregister(shortcut);
+      console.log('快捷键已注销:', shortcut);
     }
+  } catch (error) {
+    console.error('注销快捷键失败:', shortcut, error);
+    throw error;
+  }
+}
+
+// 修改 registerShortcutsMain 函数，添加注销旧快捷键的逻辑
+export async function registerShortcutsMain(controller: any = 'default') {
+  try {
+    // 先读取当前配置
+    const config = await JSON.parse(<string>await readShortcutConfig());
+    console.log('读取到的快捷键配置:', config);
+
+    // 获取旧的快捷键配置
+    const oldConfig = {
+      default: config.shortcut_key.default,
+      fixed_copy: config.shortcut_key.fixed_copy,
+      fixed_ocr: config.shortcut_key.fixed_ocr
+    };
+
+    // 注销所有旧的快捷键
+    for (const key of Object.values(oldConfig)) {
+      if (key) {
+        try {
+          await unregisterShortcut(key);
+        } catch (error) {
+          console.error('注销旧快捷键失败:', key, error);
+          // 继续处理其他快捷键
+        }
+      }
+    }
+
+    // 注册新的快捷键
+    await registerShortcuts(
+      config.shortcut_key.default,
+      captureScreenshot,
+      'default'
+    );
+
+    await registerShortcuts(
+      config.shortcut_key.fixed_copy,
+      captureScreenshot,
+      'fixed_copy'
+    );
+
+    console.log(controller, '注册快捷键成功');
+    return true;
+  } catch (error) {
+    console.error('注册主快捷键失败:', error);
+    throw error;
+  }
 }
 
 // 快捷键执行截图

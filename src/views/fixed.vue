@@ -9,6 +9,7 @@ import {fabric} from 'fabric'
 import {writeText} from '@tauri-apps/plugin-clipboard-manager';
 import {PaintingTools} from '@/windows/painting'
 import {PhysicalPosition} from '@tauri-apps/api/window'
+import {queryAuth} from "@/windows/dbsql.ts";
 
 interface OcrItem {
   text: string;
@@ -59,8 +60,20 @@ const ocr = async () => {
   }
 
   try {
-    // const result: any = await invoke("ps_ocr", {image_path: image_path.value});
-    const result: any = await invoke("ps_ocr_pd", {image_path: image_path.value});
+    // 获取当前 OCR 引擎配置
+    const engineResult = await queryAuth(
+      'system_config', 
+      "SELECT config_value FROM system_config WHERE config_key = 'ocr_engine'"
+    ) as { config_value: string }[];
+    
+    const engine = engineResult[0]?.config_value || 'RapidOCR';
+    
+    // 根据配置调用对应的 OCR 引擎
+    const result: any = await invoke(
+      engine === 'RapidOCR' ? 'ps_ocr' : 'ps_ocr_pd', 
+      { image_path: image_path.value }
+    );
+    
     console.log('原始OCR结果:', result);
 
     let parsedResult = typeof result === 'string' ? JSON.parse(result) : result;

@@ -75,3 +75,24 @@ export async function deleteAuth(table: string, where: {[key: string]: any}) {
     WHERE ${whereClause}
     `, Object.values(where));
 }
+
+// 读取系统配置
+export async function getSystemConfig(key: string): Promise<string | null> {
+    try {
+        const result = await queryAuth('system_config', `SELECT config_value FROM system_config WHERE config_key = '${key}'`);
+        return result[0]?.config_value || null;
+    } catch (error) {
+        console.error('读取系统配置失败:', error);
+        return null;
+    }
+}
+
+// 更新系统配置
+export async function updateSystemConfig(key: string, value: string): Promise<void> {
+    try {
+        await updateAuth('system_config', { config_value: value }, { config_key: key });
+    } catch (error) {
+        console.error('更新系统配置失败:', error);
+        throw error;
+    }
+}

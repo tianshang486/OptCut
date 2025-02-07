@@ -84,26 +84,6 @@ struct User {
 }
 
 
-async fn query_database() -> Result<String, String> {
-    // 连接到 SQLite 数据库
-    let pool = SqlitePool::connect("sqlite:test.db")
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // 执行查询
-    let user: Option<User> = sqlx::query_as("SELECT id, name FROM users WHERE id = ?")
-        .bind(1)
-        .fetch_optional(&pool)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // 处理查询结果
-    if let Some(user) = user {
-        Ok(format!("User ID: {}, Name: {}", user.id, user.name))
-    } else {
-        Err("No user found".to_string())
-    }
-}
 
 // 快捷键表结构
 #[derive(FromRow, Serialize, Deserialize)]

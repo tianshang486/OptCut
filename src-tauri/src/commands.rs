@@ -8,6 +8,8 @@ use xcap::{image, Monitor};
 use crate::utils::{color, read_conf::read_conf};
 use crate::utils::sql::{get_shortcut_keys, init_db, query_tables};
 // use paddleocr::Ppocr;
+use tauri::Manager;
+
 #[derive(Serialize, Deserialize)]
 struct Struct {
     image_path: String,
@@ -288,4 +290,66 @@ pub async fn query_database_info() -> Result<String, String> {
     println!("{}", result);
 
     Ok(result.to_string())
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct ShortcutConfig {
+    default: String,
+    fixed_copy: String,
+    fixed_ocr: String,
+}
+
+#[tauri::command]
+pub async fn save_shortcuts(shortcuts: ShortcutConfig) -> Result<(), String> {
+    let pool = init_db().await?;
+    
+    // 更新每个快捷键
+    sqlx::query("UPDATE shortcutKey SET shortcut_key = ? WHERE function = ?")
+        .bind(&shortcuts.default)
+        .bind("default")
+        .execute(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+        
+    sqlx::query("UPDATE shortcutKey SET shortcut_key = ? WHERE function = ?")
+        .bind(&shortcuts.fixed_copy)
+        .bind("fixed_copy")
+        .execute(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+        
+    sqlx::query("UPDATE shortcutKey SET shortcut_key = ? WHERE function = ?")
+        .bind(&shortcuts.fixed_ocr)
+        .bind("fixed_ocr")
+        .execute(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn restart_app(app_handle: tauri::AppHandle) -> Result<(), String> {
+    // 检查是否是开发环境
+    #[cfg(debug_assertions)]
+    {
+        // 开发环境下只关闭应用，让用户手动重启
+        app_handle.exit(0);
+        return Ok(());
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        // 生产环境下的重启逻辑
+        let current_exe = env::current_exe()
+            .map_err(|e| format!("Failed to get current exe path: {}", e))?;
+        
+        Command::new(&current_exe)
+            .spawn()
+            .map_err(|e| format!("Failed to start new process: {}", e))?;
+        
+        app_handle.exit(0);
+    }
+
+    Ok(())
 }
