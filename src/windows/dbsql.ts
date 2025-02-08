@@ -15,12 +15,11 @@ async function initDatabase() {
 
 
 // 查询数据
-export async function queryAuth(table: string, sql?: string) {
+export async function queryAuth<T = any>(table: string, sql?: string): Promise<T[]> {
     try {
         if (!db) {
             await initDatabase();
         }
-
         return await db!.select(sql || `SELECT * FROM ${table}`);
     } catch (error) {
         console.error('数据库查询错误:', error);
@@ -79,7 +78,7 @@ export async function deleteAuth(table: string, where: {[key: string]: any}) {
 // 读取系统配置
 export async function getSystemConfig(key: string): Promise<string | null> {
     try {
-        const result = await queryAuth('system_config', `SELECT config_value FROM system_config WHERE config_key = '${key}'`);
+        const result = await queryAuth<{ config_value: string }>('system_config', `SELECT config_value FROM system_config WHERE config_key = '${key}'`);
         return result[0]?.config_value || null;
     } catch (error) {
         console.error('读取系统配置失败:', error);

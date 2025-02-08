@@ -60,10 +60,14 @@ pub fn get_migrations() -> Vec<Migration> {
             END;
             
             -- 插入默认配置
-            INSERT INTO system_config (config_key, config_value) VALUES
-                ('version', '1.0.0'),
-                ('language', 'zh-CN'),
-                ('ocr_engine', 'RapidOCR');
+            INSERT INTO system_config (config_key, config_value, extra) VALUES
+                ('version', '1.0.0', '版本号'),
+                ('language', 'zh-CN', '界面语言'),
+                ('ocr_engine', 'RapidOCR', '离线OCR引擎'),
+                ('ocr_mode', 'offline', 'OCR模式：online/offline'),
+                ('tencent_secret_id', '', '腾讯云SecretId'),
+                ('tencent_secret_key', '', '腾讯云SecretKey'),
+                ('tencent_ocr_enabled', 'false', '腾讯云OCR是否启用');
         ",
         kind: MigrationKind::Up,
     }]

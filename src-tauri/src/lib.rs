@@ -4,7 +4,7 @@ mod migrations;
 mod utils;
 use crate::commands::{
     capture_screen_fixed, capture_screen_one, delete_temp_file, get_color_at, ps_ocr, ps_ocr_pd, query_database_info
-    , read_config,save_shortcuts,restart_app
+    , read_config,save_shortcuts,restart_app,tencent_ocr,tencent_ocr_test
 };
 use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
@@ -45,7 +45,9 @@ pub fn run() {
             ps_ocr_pd,
             query_database_info,
             save_shortcuts,
-            restart_app
+            restart_app,
+            tencent_ocr,
+            tencent_ocr_test
         ])
         // 阻止默认关闭事件,弹窗提示是否关闭窗口
         .on_window_event(|window, event| match event {

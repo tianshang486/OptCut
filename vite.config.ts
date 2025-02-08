@@ -7,11 +7,12 @@ const __dirname = path.resolve();
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
-
 // https://vitejs.dev/config/
 // @ts-ignore
 export default defineConfig(async (): Promise<any> => ({
-    plugins: [vue()],
+    plugins: [
+        vue()
+    ],
     // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
     //
     // 1. prevent vite from obscuring rust errors
@@ -42,5 +43,15 @@ export default defineConfig(async (): Promise<any> => ({
     },
     // esbuild: {
     //     drop: ["console", "debugger"]
-    // }
+    // },
+    build: {
+        minify: 'terser',
+        terserOptions: {
+            compress: {
+                drop_console: true, // 移除 console
+                drop_debugger: true, // 移除 debugger
+            },
+        },
+        target: 'esnext' // 支持顶级 await
+    }
 }));

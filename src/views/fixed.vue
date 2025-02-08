@@ -10,6 +10,7 @@ import {writeText} from '@tauri-apps/plugin-clipboard-manager';
 import {PaintingTools} from '@/windows/painting'
 import {PhysicalPosition} from '@tauri-apps/api/window'
 import {queryAuth} from "@/windows/dbsql.ts";
+import { tencentOCR } from '@/windows/ocr';
 
 interface OcrItem {
   text: string;
@@ -60,21 +61,34 @@ const ocr = async () => {
   }
 
   try {
-    // 获取当前 OCR 引擎配置
-    const engineResult = await queryAuth(
+    // 获取 OCR 模式
+    const modeResult = await queryAuth(
       'system_config', 
-      "SELECT config_value FROM system_config WHERE config_key = 'ocr_engine'"
+      "SELECT config_value FROM system_config WHERE config_key = 'ocr_mode'"
     ) as { config_value: string }[];
+
+    const mode = modeResult[0]?.config_value || 'offline';
+
+    let result: any;
     
-    const engine = engineResult[0]?.config_value || 'RapidOCR';
-    
-    // 根据配置调用对应的 OCR 引擎
-    const result: any = await invoke(
-      engine === 'RapidOCR' ? 'ps_ocr' : 'ps_ocr_pd', 
-      { image_path: image_path.value }
-    );
-    
-    console.log('原始OCR结果:', result);
+    if (mode === 'online') {
+      // 使用腾讯云 OCR
+      result = await tencentOCR(image_path.value);
+    } else {
+      // 使用离线 OCR
+      const engineResult = await queryAuth(
+        'system_config', 
+        "SELECT config_value FROM system_config WHERE config_key = 'ocr_engine'"
+      ) as { config_value: string }[];
+      
+      const engine = engineResult[0]?.config_value || 'RapidOCR';
+      result = await invoke(
+        engine === 'RapidOCR' ? 'ps_ocr' : 'ps_ocr_pd',
+        { image_path: image_path.value }
+      );
+    }
+
+    console.log('OCR 结果:', result);
 
     let parsedResult = typeof result === 'string' ? JSON.parse(result) : result;
 
@@ -82,6 +96,24 @@ const ocr = async () => {
     const ocrData = Array.isArray(parsedResult) ? parsedResult[0] : parsedResult;
 
     if (ocrData && ocrData.code === 100 && Array.isArray(ocrData.data)) {
+      // 适配腾讯云 OCR 的 box 格式
+      ocrData.data = ocrData.data.map((item: any) => {
+        const [x, y] = item.box[0]; // 取第一个点作为左上角坐标
+        const textLength = item.text.length;
+        const boxWidth = textLength * 10; // 假设每个字符宽度为 10px
+        const boxHeight = 20; // 假设高度为 20px
+
+        return {
+          ...item,
+          box: [
+            [x, y], // 左上角
+            [x + boxWidth, y], // 右上角
+            [x + boxWidth, y + boxHeight], // 右下角
+            [x, y + boxHeight] // 左下角
+          ]
+        };
+      });
+
       console.log('OCR completed, data:', ocrData)
       image_ocr.value = ocrData
       is_ocr.value = true
@@ -104,8 +136,8 @@ const ocr = async () => {
       console.error('数据格式不正确:', ocrData);
     }
   } catch (error) {
-    console.error('OCR处理错误:', error);
-    alert('OCR处理失败' + error);
+    console.error('OCR 处理错误:', error);
+    alert('OCR 处理失败: ' + error);
   }
 };
 

@@ -1,14 +1,16 @@
-use std::{env, os::windows::process::CommandExt, process::Command};
-use std::path::{Path, PathBuf};
+use crate::utils::sql::{get_shortcut_keys, init_db, query_tables};
+use crate::utils::{color, read_conf::read_conf};
 use image::open;
 use mouse_position::mouse_position::Mouse;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use xcap::{image, Monitor};
-use crate::utils::{color, read_conf::read_conf};
-use crate::utils::sql::{get_shortcut_keys, init_db, query_tables};
+use std::path::Path;
+use std::{env, os::windows::process::CommandExt, process::Command};
 // use paddleocr::Ppocr;
 use tauri::Manager;
+use xcap::{image, Monitor};
+use crate::utils::img_util::image_to_base64;
+use crate::utils::tencent_ocr::{call_tencent_ocr, get_tencent_config};
 
 #[derive(Serialize, Deserialize)]
 struct Struct {
@@ -352,4 +354,22 @@ pub async fn restart_app(app_handle: tauri::AppHandle) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn read_image_base64(path: String) -> Result<String, String> {
+    image_to_base64(Path::new(&path))
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn tencent_ocr(image_path: String) -> Result<String, String> {
+    let (secret_id, secret_key) = get_tencent_config().await?;
+    call_tencent_ocr(&image_path, &secret_id, &secret_key).await
+}
+
+#[tauri::command]
+pub async fn tencent_ocr_test (secret_id: String, secret_key: String) -> Result<bool, String> {
+    let result = call_tencent_ocr("tools/img.png", &secret_id, &secret_key).await?;
+    Ok(!result.contains("Error"))
 }
