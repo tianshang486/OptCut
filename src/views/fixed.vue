@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {Windows,} from '@/windows/create'
 // import {createText} from '@/windows/text_ocr_create.ts'
-import {onMounted, onUnmounted, Ref, ref, UnwrapRef} from "vue";
+import {onMounted, onUnmounted, Ref, ref, UnwrapRef, nextTick} from "vue";
 import {invoke} from "@tauri-apps/api/core";
 import {emit, listen} from "@tauri-apps/api/event";
 import {copyImage} from "@/windows/method.ts";
@@ -10,11 +10,13 @@ import {writeText} from '@tauri-apps/plugin-clipboard-manager';
 import {PaintingTools} from '@/windows/painting'
 import {PhysicalPosition} from '@tauri-apps/api/window'
 import {queryAuth} from "@/windows/dbsql.ts";
-import { tencentOCR } from '@/windows/ocr';
+import {tencentOCR} from '@/windows/ocr';
+import { translateTexts} from '@/windows/translate'
 
 interface OcrItem {
   text: string;
   box: number[][];
+  translatedText?: string;
 }
 
 const NewWindows = new Windows()
@@ -32,7 +34,10 @@ if (operationalID === 'fixed_copy') {
 
 // 从path路径http://asset.localhost/C:\Users\zxl\AppData\Local\Temp\AGCut_1731571102.png截取图片路径
 const image_path: any = ref(path.replace('http://asset.localhost/', ''))
-const image_ocr: any = ref([])
+const image_ocr = ref<{ code: any; data: OcrItem[] }>({
+  code: null,
+  data: []
+});
 const is_ocr: Ref<UnwrapRef<boolean>, UnwrapRef<boolean> | boolean> = ref(false)
 // 用于跟踪菜单状态
 
@@ -99,8 +104,7 @@ const ocr = async () => {
       // 适配腾讯云 OCR 的 box 格式
       ocrData.data = ocrData.data.map((item: any) => {
         const [x, y] = item.box[0]; // 取第一个点作为左上角坐标
-        const textLength = item.text.length;
-        const boxWidth = textLength * 10; // 假设每个字符宽度为 10px
+        const boxWidth = calculateBoxWidth(item.text, calculateFontSize(item)); // 动态计算框宽度
         const boxHeight = 20; // 假设高度为 20px
 
         return {
@@ -145,7 +149,10 @@ const ocr = async () => {
 listen("ocrImage", async (event) => {
   if (event.payload === null) {
     is_ocr.value = false
-    image_ocr.value = []
+    image_ocr.value = {
+      code: null,
+      data: []
+    }
     // 恢复原始窗口大小
     const size = await getSize()
     if (size !== null) {
@@ -168,48 +175,61 @@ const isTranslated = ref(false)
 // 监听翻译事件
 listen("translateText", async () => {
   if (image_ocr.value && image_ocr.value.data) {
-    // 在翻译前，确保保存完整的原始数据结构
-    if (!originalOcrData.value) {
-      console.log('Saving original OCR data before translation:', image_ocr.value)
-      // 保存完整的数据结构
-      originalOcrData.value = {
-        code: image_ocr.value.code,
-        data: image_ocr.value.data.map((item: OcrItem) => ({
-          text: item.text,
-          box: [...item.box]  // 确保复制所有必要的属性
-        }))
+    try {
+      // 在翻译前，确保保存完整的原始数据结构
+      if (!originalOcrData.value) {
+        console.log('Saving original OCR data before translation:', image_ocr.value)
+        // 保存完整的数据结构
+        originalOcrData.value = {
+          code: image_ocr.value.code,
+          data: image_ocr.value.data.map((item: OcrItem) => ({
+            text: item.text,
+            box: [...item.box]  // 确保复制所有必要的属性
+          }))
+        }
       }
-    }
 
-    // 添加翻译
-    image_ocr.value.data = image_ocr.value.data.map((item: any) => ({
-      ...item,
-      text: item.text + ' 已翻译'
-    }))
-    isTranslated.value = true
-    await emit('translationStatus', true)
+      // 获取所有需要翻译的文本
+      const texts = image_ocr.value.data.map(item => item.text);
+
+      // 批量翻译
+      const translatedTexts = await translateTexts(texts);
+
+      // 在更新显示数据前添加调试信息
+      console.log('原始文本:', texts);
+      console.log('翻译结果:', translatedTexts);
+
+      // 更新显示数据，只添加翻译结果，不修改原始文本
+      image_ocr.value = {
+        ...image_ocr.value,
+        data: image_ocr.value.data.map((item, index) => ({
+          ...item,
+          translatedText: translatedTexts[index] // 只添加翻译结果
+        }))
+      };
+
+      isTranslated.value = true;
+      await emit('translationStatus', true);
+
+      // 强制更新界面
+      await nextTick();
+    } catch (error) {
+      const err = error as Error; // 将 error 断言为 Error 类型
+      console.error('翻译处理失败:', err);
+      alert('翻译处理失败: ' + err.message);
+    }
   }
-})
+});
 
 // 监听取消翻译事件
 listen("cancelTranslate", async () => {
-  console.log('Restoring original OCR data:', originalOcrData.value)
   if (originalOcrData.value) {
-    // 完全替换为原始数据
-    image_ocr.value = {
-      code: originalOcrData.value.code,
-      data: originalOcrData.value.data.map((item: OcrItem) => ({
-        text: item.text,
-        box: [...item.box]
-      }))
-    }
-
-    // 清空原始数据
-    originalOcrData.value = null
-    isTranslated.value = false
-    await emit('translationStatus', false)
+    // 恢复原始数据
+    image_ocr.value = originalOcrData.value;
+    isTranslated.value = false;
+    await emit('translationStatus', false);
   }
-})
+});
 
 async function CreateContextMenu(event: any) {
   event.preventDefault();
@@ -454,27 +474,52 @@ listen('show-alert', (event: any) => {
   }, 2000)
 })
 
-// 在 script 部分添加计算字体大小的函数
+// 修改计算字体大小的函数
 const calculateFontSize = (item: OcrItem) => {
   const boxWidth = Math.round(item.box[2][0] - item.box[0][0]);
   const boxHeight = Math.round(item.box[2][1] - item.box[0][1]);
   const textLength = item.text.length;
 
   // 根据宽度和高度计算最大字体大小
-  const widthBasedSize = boxWidth / (textLength * 0.55);  // 调整系数以更好地适应宽度
-  const heightBasedSize = boxHeight * 0.9;  // 调整系数以更好地适应高度
+  const widthBasedSize = boxWidth / (textLength * 0.9);  // 调整系数以更好地适应宽度
+  const heightBasedSize = boxHeight * 0.7;  // 调整系数以更好地适应高度
 
   // 取两者中较小的值
   return Math.min(widthBasedSize, heightBasedSize);
 };
 
-// 添加滚轮事件处理函数
+// 修改滚轮事件处理函数
 const handleWheel = (event: WheelEvent) => {
   const ocrOverlay = document.querySelector('.ocr-overlay') as HTMLElement;
   if (ocrOverlay) {
     // 水平滚动
-    ocrOverlay.scrollLeft += event.deltaY;
+    ocrOverlay.scrollLeft += event.deltaY * 2; // 增加滚动速度
     event.preventDefault();  // 阻止默认的垂直滚动行为
+  }
+};
+
+// 修改计算框宽度的逻辑
+const calculateBoxWidth = (text: string, fontSize: number) => {
+  const textLength = text.length;
+  const calculatedWidth = textLength * fontSize * 1.2; // 增加文本框长度
+  const maxWidth = window.innerWidth * 0.95; // 最大宽度为屏幕宽度的 90%
+  return Math.min(calculatedWidth, maxWidth); // 取较小值
+};
+
+// 添加点击事件处理函数
+const scrollToItem = (index: number) => {
+  const itemElement = document.getElementById(`ocr-item-${index}`);
+  if (itemElement) {
+    // 移除之前的高亮
+    document.querySelectorAll('.ocr-list-item').forEach(el => {
+      el.classList.remove('highlight');
+    });
+
+    // 添加高亮
+    itemElement.classList.add('highlight');
+
+    // 滚动到对应项
+    itemElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 };
 
@@ -497,22 +542,23 @@ const handleWheel = (event: WheelEvent) => {
       <!-- OCR 文本覆盖层 -->
       <div class="ocr-overlay" @mousedown.stop @wheel="handleWheel">
         <div
-            v-for="(item, index) in image_ocr?.data"
+            v-for="(item, index) in image_ocr.data"
             :key="index"
             class="ocr-text"
             :style="{
               left: `${Math.round(item.box[0][0])}px`,
               top: `${Math.round(item.box[0][1])}px`,
-              width: `${Math.round(item.box[2][0] - item.box[0][0])}px`,
+              width: `${calculateBoxWidth(item.text, calculateFontSize(item))}px`,
               height: `${Math.round(item.box[2][1] - item.box[0][1])}px`,
               fontSize: `${calculateFontSize(item)}px`,
               lineHeight: `${Math.round(item.box[2][1] - item.box[0][1])}px`,
               whiteSpace: 'nowrap',
-              overflow: 'visible',
-              textOverflow: 'clip',
+              overflow: 'visible',  // 允许内容溢出
+              textOverflow: 'unset',
               textAlign: 'left',
             }"
             @dblclick="copyText(item.text)"
+            @click="scrollToItem(index)"
         >
           {{ item.text }}
         </div>
@@ -520,9 +566,12 @@ const handleWheel = (event: WheelEvent) => {
 
       <!-- 右侧文本列表 -->
       <div class="w-[300px] h-full box-border overflow-y-auto bg-neutral-700">
-        <div v-for="(item, index) in image_ocr?.data"
-             :key="index"
-             class="flex items-start m-2 p-1 hover:bg-white/10 select-none">
+        <div
+            v-for="(item, index) in image_ocr.data"
+            :key="index"
+            :id="`ocr-item-${index}`"
+            class="flex items-start m-2 p-1 hover:bg-white/10 select-none ocr-list-item"
+        >
           <span
               class="min-w-[24px] mr-2 text-gray-500 text-right select-none"
           >{{ index + 1 }}</span>
@@ -530,7 +579,12 @@ const handleWheel = (event: WheelEvent) => {
               class="flex-1 break-all cursor-copy select-none"
               @dblclick="copyText(item.text)"
           >
-            {{ item.text }}
+            <div v-if="isTranslated && item.translatedText">
+              {{ item.translatedText }}
+            </div>
+            <div v-else>
+              {{ item.text }}
+            </div>
           </div>
         </div>
       </div>
@@ -611,9 +665,15 @@ const handleWheel = (event: WheelEvent) => {
   width: calc(100% - 300px);
   height: 100%;
   pointer-events: none;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow-x: auto;  
+  overflow-y: hidden;  
   white-space: nowrap;
+  scrollbar-width: none;  /* 隐藏滚动条（Firefox） */
+  -ms-overflow-style: none;  /* 隐藏滚动条（IE/Edge） */
+}
+
+.ocr-overlay::-webkit-scrollbar {
+  display: none;  /* 隐藏滚动条（Chrome/Safari） */
 }
 
 .ocr-text {
@@ -653,6 +713,10 @@ const handleWheel = (event: WheelEvent) => {
   border-radius: 5px;
 }
 
+.highlight {
+  background-color: rgba(33, 150, 243, 0.2) !important;  /* 高亮背景色 */
+  outline: 2px solid rgba(33, 150, 243, 0.5);  /* 高亮边框 */
+}
 
 
 </style>

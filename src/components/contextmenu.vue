@@ -62,7 +62,7 @@ const menuItems = [
   { 
     label: '翻译', 
     handler: async () => {
-      await emit('translateText', '已翻译')
+      await emit('translateText')
       is_translated.value = true
       await NewWindows.closeWin('contextmenu')
     },

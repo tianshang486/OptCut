@@ -67,7 +67,20 @@ pub fn get_migrations() -> Vec<Migration> {
                 ('ocr_mode', 'offline', 'OCR模式：online/offline'),
                 ('tencent_secret_id', '', '腾讯云SecretId'),
                 ('tencent_secret_key', '', '腾讯云SecretKey'),
-                ('tencent_ocr_enabled', 'false', '腾讯云OCR是否启用');
+                ('tencent_ocr_enabled', 'false', '腾讯云OCR是否启用'),
+                ('baidu_app_id', '', '百度翻译App ID'),
+                ('baidu_secret_key', '', '百度翻译Secret Key'),
+                ('translate_enabled', 'false', '翻译功能是否启用');
+            
+            -- 创建翻译历史表
+            CREATE TABLE IF NOT EXISTS translate_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_text TEXT NOT NULL,
+                translated_text TEXT NOT NULL,
+                source_lang TEXT NOT NULL,
+                target_lang TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+            );
         ",
         kind: MigrationKind::Up,
     }]

@@ -6,4 +6,5 @@ pub mod tray;
 pub mod sql;
 pub mod img_util;
 pub mod tencent_ocr;
+pub mod translate;
 

@@ -1,5 +1,5 @@
 use crate::utils::sql::{get_shortcut_keys, init_db, query_tables};
-use crate::utils::{color, read_conf::read_conf};
+use crate::utils::{color, read_conf::read_conf, translate};
 use image::open;
 use mouse_position::mouse_position::Mouse;
 use serde::{Deserialize, Serialize};
@@ -11,6 +11,9 @@ use tauri::Manager;
 use xcap::{image, Monitor};
 use crate::utils::img_util::image_to_base64;
 use crate::utils::tencent_ocr::{call_tencent_ocr, get_tencent_config};
+use rand;
+use md5;
+use reqwest;
 
 #[derive(Serialize, Deserialize)]
 struct Struct {
@@ -372,4 +375,18 @@ pub async fn tencent_ocr(image_path: String) -> Result<String, String> {
 pub async fn tencent_ocr_test (secret_id: String, secret_key: String) -> Result<bool, String> {
     let result = call_tencent_ocr("tools/img.png", &secret_id, &secret_key).await?;
     Ok(!result.contains("Error"))
+}
+
+
+
+#[tauri::command]
+pub async fn baidu_translate(text: String, from: String, to: String) -> Result<String, String> {
+    let (app_id, secret_key) = translate::get_baidu_config().await?;
+    translate::baidu_translate(text, from, to, app_id, secret_key).await
+}
+
+// 添加百度翻译测试接口
+#[tauri::command]
+pub async fn baidu_translate_test(text: String, from: String, to: String, app_id: String, secret_key: String) -> Result<String, String> {
+    translate::baidu_translate(text, from, to, app_id, secret_key).await
 }
