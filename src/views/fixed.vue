@@ -105,8 +105,10 @@ const ocr = async () => {
       ocrData.data = ocrData.data.map((item: any) => {
         const [x, y] = item.box[0]; // 取第一个点作为左上角坐标
         const boxWidth = calculateBoxWidth(item.text, calculateFontSize(item)); // 动态计算框宽度
-        const boxHeight = 20; // 假设高度为 20px
 
+        const boxHeight = Math.abs(item.box[1][1] - item.box[2][1]); // 根据实际坐标计算高度
+        // 取绝对值，防止负值
+        console.log('boxHeight:', boxHeight)
         return {
           ...item,
           box: [
@@ -448,7 +450,7 @@ const drag = async (event: MouseEvent) => {
       if (toolbarWindow) {
         await toolbarWindow.setPosition(new PhysicalPosition(
             newX,
-            newY + (await currentWindow.outerSize()).height + 5
+            newY + (await currentWindow.outerSize()).height + 1
         ))
       }
     }
@@ -474,36 +476,41 @@ listen('show-alert', (event: any) => {
   }, 2000)
 })
 
-// 修改计算字体大小的函数
+// 修改 calculateFontSize 函数
 const calculateFontSize = (item: OcrItem) => {
-  const boxWidth = Math.round(item.box[2][0] - item.box[0][0]);
   const boxHeight = Math.round(item.box[2][1] - item.box[0][1]);
-  const textLength = item.text.length;
+  return boxHeight * 0.85;  // 从 0.95 调整为 0.85，缩小 10%
+};
 
-  // 根据宽度和高度计算最大字体大小
-  const widthBasedSize = boxWidth / (textLength * 0.9);  // 调整系数以更好地适应宽度
-  const heightBasedSize = boxHeight * 0.7;  // 调整系数以更好地适应高度
-
-  // 取两者中较小的值
-  return Math.min(widthBasedSize, heightBasedSize);
+// 优化计算行高的逻辑
+const calculateLineHeight = (boxHeight: number) => {
+  const minLineHeight = 10; // 设置最小行高
+  return Math.max(Math.round(boxHeight * 0.95), minLineHeight); // 根据文本框高度动态调整行高
 };
 
 // 修改滚轮事件处理函数
 const handleWheel = (event: WheelEvent) => {
-  const ocrOverlay = document.querySelector('.ocr-overlay') as HTMLElement;
-  if (ocrOverlay) {
+  const target = event.target as HTMLElement;
+  // 只有当目标元素是 ocr-text 时才处理滚动
+  if (target.classList.contains('ocr-text')) {
+    // 阻止事件冒泡
+    event.stopPropagation();
     // 水平滚动
-    ocrOverlay.scrollLeft += event.deltaY * 2; // 增加滚动速度
-    event.preventDefault();  // 阻止默认的垂直滚动行为
+    target.scrollLeft += event.deltaY * 2;
+    // 阻止默认的垂直滚动行为
+    event.preventDefault();
   }
 };
 
-// 修改计算框宽度的逻辑
+// 优化计算框宽度的逻辑
 const calculateBoxWidth = (text: string, fontSize: number) => {
-  const textLength = text.length;
-  const calculatedWidth = textLength * fontSize * 1.2; // 增加文本框长度
-  const maxWidth = window.innerWidth * 0.95; // 最大宽度为屏幕宽度的 90%
-  return Math.min(calculatedWidth, maxWidth); // 取较小值
+  let totalWidth = 0;
+  for (const char of text) {
+    totalWidth += getCharWidth(char) * fontSize;
+  }
+  const charSpacing = 0.5; // 减少字符间距
+  totalWidth += (text.length - 1) * charSpacing; // 计算总字符间距
+  return totalWidth; // 直接返回计算的总宽度，不再限制最大宽度
 };
 
 // 添加点击事件处理函数
@@ -523,6 +530,20 @@ const scrollToItem = (index: number) => {
   }
 };
 
+// 调整字符宽度系数
+const getCharWidth = (char: string) => {
+  // 汉字宽度
+  if (/[\u4e00-\u9fa5]/.test(char)) {
+    return 0.8; // 汉字宽度系数调整为 1.0
+  }
+  // 数字和字母宽度
+  if (/[0-9a-zA-Z]/.test(char)) {
+    return 0.6; // 数字和字母宽度系数调整为 0.6
+  }
+  // 其他字符
+  return 0.6; // 默认宽度系数调整为 0.8
+};
+
 </script>
 
 
@@ -540,7 +561,7 @@ const scrollToItem = (index: number) => {
     <!-- OCR 结果显示 -->
     <div class="content" v-if="is_ocr">
       <!-- OCR 文本覆盖层 -->
-      <div class="ocr-overlay" @mousedown.stop @wheel="handleWheel">
+      <div class="ocr-overlay" @mousedown.stop>
         <div
             v-for="(item, index) in image_ocr.data"
             :key="index"
@@ -548,15 +569,15 @@ const scrollToItem = (index: number) => {
             :style="{
               left: `${Math.round(item.box[0][0])}px`,
               top: `${Math.round(item.box[0][1])}px`,
-              width: `${calculateBoxWidth(item.text, calculateFontSize(item))}px`,
-              height: `${Math.round(item.box[2][1] - item.box[0][1])}px`,
               fontSize: `${calculateFontSize(item)}px`,
-              lineHeight: `${Math.round(item.box[2][1] - item.box[0][1])}px`,
+              lineHeight: `${calculateLineHeight(Math.abs(item.box[1][1] - item.box[2][1]))}px`,
+              height: `${Math.abs(item.box[1][1] - item.box[2][1])}px`,
               whiteSpace: 'nowrap',
-              overflow: 'visible',  // 允许内容溢出
+              overflow: 'auto',  // 改为 auto，保留滚动功能
               textOverflow: 'unset',
               textAlign: 'left',
             }"
+            @wheel="handleWheel"
             @dblclick="copyText(item.text)"
             @click="scrollToItem(index)"
         >
@@ -686,20 +707,21 @@ const scrollToItem = (index: number) => {
   padding: 0;
   margin: 0;
   z-index: 1000;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  overflow: visible;
-  text-overflow: clip;
-  white-space: nowrap;
+  display: inline-block;  /* 改为 inline-block，让宽度自适应内容 */
+  max-width: 100%;  /* 添加最大宽度限制 */
+  overflow: auto;  /* 保留滚动功能 */
+  text-overflow: unset;  /* 不显示省略号 */
+  white-space: nowrap;  /* 不换行 */
   text-align: left;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
 }
 
 .ocr-text:hover {
   background: rgba(0, 0, 0, 0.6);
   outline: 2px solid rgba(33, 150, 243, 0.5);
   color: rgb(255, 255, 255);
-  /*text-shadow: 0 0 1px white, 0 0 1px white, 0 0 1px white, 0 0 1px white;  悬停时添加白色边缘效果*/
+  z-index: 1001;  /* 确保悬停时在最上层 */
 }
 
 /* 滚动条样式 */
@@ -718,5 +740,15 @@ const scrollToItem = (index: number) => {
   outline: 2px solid rgba(33, 150, 243, 0.5);  /* 高亮边框 */
 }
 
+/* 隐藏滚动条 */
+.ocr-text {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+  pointer-events: auto; /* 确保可以接收鼠标事件 */
+}
+
+.ocr-text::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
 
 </style>
