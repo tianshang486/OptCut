@@ -1,21 +1,31 @@
 use crate::utils::sql::{init_db, get_shortcut_keys};
 use serde_json::json;
+use std::sync::OnceLock;
+use sqlx::SqlitePool;
 
-pub async fn read_conf() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    let pool = init_db().await?;
+static DB_POOL: OnceLock<SqlitePool> = OnceLock::new();
 
-    // 读取快捷键配置
+pub async fn read_conf() -> Result<serde_json::Value, String> {
+    // 获取或初始化数据库连接池
+    let pool = if let Some(p) = DB_POOL.get() {
+        p
+    } else {
+        let p = init_db().await?;
+        DB_POOL.set(p.clone()).unwrap();
+        DB_POOL.get().unwrap()
+    };
+    
+    // 查询快捷键配置
     let shortcut_keys = get_shortcut_keys(&pool).await?;
-
-    // 构建 JSON 结构
-    let json_value = json!({
+    
+    // 构建配置对象
+    let config = json!({
         "shortcut_key": {
-            "default": shortcut_keys.iter().find(|k| k.function == "default").map(|k| k.shortcut_key.as_str()).unwrap_or("ctrl+alt+q"),
-            "fixed_copy": shortcut_keys.iter().find(|k| k.function == "fixed_copy").map(|k| k.shortcut_key.as_str()).unwrap_or("ctrl+alt+w"),
-            "fixed_ocr": shortcut_keys.iter().find(|k| k.function == "fixed_ocr").map(|k| k.shortcut_key.as_str()).unwrap_or("ctrl+alt+e"),
+            "default": shortcut_keys.iter().find(|&x| x.function == "default").map_or("", |x| &x.shortcut_key),
+            "fixed_copy": shortcut_keys.iter().find(|&x| x.function == "fixed_copy").map_or("", |x| &x.shortcut_key),
+            "fixed_ocr": shortcut_keys.iter().find(|&x| x.function == "fixed_ocr").map_or("", |x| &x.shortcut_key),
         }
     });
 
-    println!("{:?}", json_value);
-    Ok(json_value)
+    Ok(config)
 }

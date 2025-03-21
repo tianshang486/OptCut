@@ -7,13 +7,16 @@ use serde_json::json;
 use std::path::Path;
 use std::{env, os::windows::process::CommandExt, process::Command};
 // use paddleocr::Ppocr;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use xcap::{image, Monitor};
 use crate::utils::img_util::image_to_base64;
 use crate::utils::tencent_ocr::{call_tencent_ocr, get_tencent_config};
 use rand;
 use md5;
 use reqwest;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static TRACKING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Serialize, Deserialize)]
 struct Struct {
@@ -165,16 +168,16 @@ pub fn capture_screen_one() -> Result<String, String> {
     image_data
         .save(&my_struct.image_path)
         .map_err(|_| "保存截图失败".to_string())?;
-    //    .map_err(|_| "打开截图失败".to_string())?;
-    // 构建返回数据
+
+    // 构建返回数据，处理所有可能的Result
     Ok(json!({
         "path": my_struct.image_path.to_string(),
         "x": x,
         "y": y,
-        "window_x": screen.x(),
-        "window_y": screen.y(),
-        "width": screen.width(),
-        "height": screen.height()
+        "window_x": screen.x().unwrap_or_default(),
+        "window_y": screen.y().unwrap_or_default(),
+        "width": screen.width().unwrap_or_default(),
+        "height": screen.height().unwrap_or_default()
     })
     .to_string())
 }
@@ -265,6 +268,7 @@ pub fn delete_temp_file() {
 // 添加新的tauri命令
 #[tauri::command(rename_all = "snake_case")]
 pub async fn read_config() -> Result<String, String> {
+    println!("read_config called from: {:?}", std::backtrace::Backtrace::capture());  // 添加调用栈跟踪
     read_conf()
         .await
         .map(|config| serde_json::to_string(&config).unwrap_or_default())
@@ -389,4 +393,78 @@ pub async fn baidu_translate(text: String, from: String, to: String) -> Result<S
 #[tauri::command]
 pub async fn baidu_translate_test(text: String, from: String, to: String, app_id: String, secret_key: String) -> Result<String, String> {
     translate::baidu_translate(text, from, to, app_id, secret_key).await
+}
+
+// 获取所有显示器信息
+#[tauri::command]
+pub fn get_all_monitors() -> Result<String, String> {
+    let monitors = xcap::Monitor::all().map_err(|e| e.to_string())?;
+    
+    let monitors_info: Vec<serde_json::Value> = monitors.iter().map(|monitor| {
+        json!({
+            "id": monitor.id().unwrap_or_default(),
+            "x": monitor.x().unwrap_or_default(),
+            "y": monitor.y().unwrap_or_default(),
+            "width": monitor.width().unwrap_or_default(),
+            "height": monitor.height().unwrap_or_default(),
+            "is_primary": monitor.is_primary().unwrap_or_default()
+        })
+    }).collect();
+    
+    Ok(serde_json::to_string(&monitors_info).unwrap())
+}
+
+// 添加新的结构体来表示鼠标位置
+#[derive(serde::Serialize)]
+struct MousePosition {
+    x: i32,
+    y: i32,
+    monitor_id: i32,
+}
+
+// 添加新的命令来获取当前鼠标位置和所在显示器
+#[tauri::command]
+pub async fn track_mouse_position(app_handle: tauri::AppHandle) -> Result<(), String> {
+    if TRACKING.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+
+    TRACKING.store(true, Ordering::SeqCst);
+    let mut last_monitor_id: u32 = 0;
+
+    std::thread::spawn(move || {
+        while TRACKING.load(Ordering::SeqCst) {
+            if let Mouse::Position { x, y } = Mouse::get_mouse_position() {
+                if let Ok(monitors) = Monitor::all() {
+                    for monitor in monitors.iter() {
+                        let monitor_x = monitor.x().unwrap_or_default();
+                        let monitor_y = monitor.y().unwrap_or_default();
+                        let monitor_width = monitor.width().unwrap_or_default();
+                        let monitor_height = monitor.height().unwrap_or_default();
+                        
+                        if x >= monitor_x && x < (monitor_x + monitor_width as i32) &&
+                           y >= monitor_y && y < (monitor_y + monitor_height as i32) {
+                            let monitor_id = monitor.id().unwrap_or_default();
+                            if last_monitor_id != monitor_id {
+                                last_monitor_id = monitor_id;
+                                let _ = app_handle.emit("switch_monitor", json!({
+                                    "monitor_id": monitor_id
+                                }));
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    });
+
+    Ok(())
+}
+
+// 添加一个停止跟踪的命令
+#[tauri::command]
+pub fn stop_mouse_tracking() {
+    TRACKING.store(false, Ordering::SeqCst);
 }

@@ -24,3 +24,4 @@ dist-ssr
 *.sw?
 /src-tauri/tools/win-BIN-CPU-x64
 target
+/setup/*.exe

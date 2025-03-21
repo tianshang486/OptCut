@@ -29,7 +29,7 @@ opt-level = "s"
 
 [profile.dev]
 codegen-units = 16
-opt-level = 0 # Prioritizes small binary size. Use `3` if you prefer speed.
+opt-level = 's' # Prioritizes small binary size. Use `3` if you prefer speed.
 #debug = true       # 保留调试信息
 
 [dependencies]
@@ -39,7 +39,7 @@ serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.137"
 tauri-plugin-dialog = "2.2.0"
 #dirs = "6.0.0"
-xcap = "0.2.2"
+xcap = "0.4.0"
 #lazy_static = "1.5.0"
 mouse_position = "0.1.4"
 tauri-plugin-fs = "2.2.0"

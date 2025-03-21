@@ -1,13 +1,13 @@
-import {captureScreenshot} from '@/windows/screenshot.ts'
+import {captureScreenshot, listenMonitorSwitch} from '@/windows/screenshot.ts'
 import {Windows} from '@/windows/create.ts'
 import {listen} from "@tauri-apps/api/event";
 import {updateAuth} from '@/windows/dbsql'
 import {isRegistered, register, ShortcutEvent, unregister} from "@tauri-apps/plugin-global-shortcut";
 import {invoke} from "@tauri-apps/api/core";
+import {captureScreenshotMain} from "@/windows/CaptureScreenshotMain.ts";
 
 const windows = new Windows();
-// 读取快捷键配置
-
+let shortcutsRegistered = false; // 添加标志来防止重复注册
 
 // 注销快捷键
 // async function unregisterShortcuts(shortcut_key: string) {
@@ -23,6 +23,7 @@ export async function registerShortcuts(shortcut_key: string, method: Function, 
         console.log('注册快捷键:', shortcut_key, )
         // 如果已注册，返回报错信息,已被占用
         if (await isRegistered(shortcut_key)) {
+            console.log('快捷键已被占用:', shortcut_key)
             return { message: '快捷键已被占用' , code: 1 }
         } else {
 
@@ -67,147 +68,126 @@ async function unregisterShortcut(shortcut: string) {
 
 // 修改 registerShortcutsMain 函数，添加注销旧快捷键的逻辑
 export async function registerShortcutsMain(controller: any = 'default') {
-  try {
-    // 先读取当前配置
-    const config = await JSON.parse(<string>await readShortcutConfig());
-    console.log('读取到的快捷键配置:', config);
-
-    // 获取旧的快捷键配置
-    const oldConfig = {
-      default: config.shortcut_key.default,
-      fixed_copy: config.shortcut_key.fixed_copy,
-      fixed_ocr: config.shortcut_key.fixed_ocr
-    };
-
-    // 注销所有旧的快捷键
-    for (const key of Object.values(oldConfig)) {
-      if (key) {
-        try {
-          await unregisterShortcut(key);
-        } catch (error) {
-          console.error('注销旧快捷键失败:', key, error);
-          // 继续处理其他快捷键
-        }
-      }
+    if (shortcutsRegistered) {
+        return;
     }
 
-    // 注册新的快捷键
-    await registerShortcuts(
-      config.shortcut_key.default,
-      captureScreenshot,
-      'default'
-    );
+    try {
+        // 先读取当前配置
+        const config = await JSON.parse(<string>await readShortcutConfig());
+        console.log('读取到的快捷键配置:', config);
 
-    await registerShortcuts(
-      config.shortcut_key.fixed_copy,
-      captureScreenshot,
-      'fixed_copy'
-    );
+        // 获取旧的快捷键配置
+        const oldConfig = {
+            default: config.shortcut_key.default,
+            fixed_copy: config.shortcut_key.fixed_copy,
+            fixed_ocr: config.shortcut_key.fixed_ocr
+        };
 
-    console.log(controller, '注册快捷键成功');
-    return true;
-  } catch (error) {
-    console.error('注册主快捷键失败:', error);
-    throw error;
-  }
-}
+        // 注销所有旧的快捷键
+        for (const key of Object.values(oldConfig)) {
+            if (key) {
+                try {
+                    await unregisterShortcut(key);
+                } catch (error) {
+                    console.error('注销旧快捷键失败:', key, error);
+                    // 继续处理其他快捷键
+                }
+            }
+        }
 
-// 快捷键执行截图
-async function captureScreenshotMain(controller: any = 'default') {
-    if (controller === 'fixed_copy') {
-        await captureScreenshot('fixed_copy');
-    } else if (controller === 'default') {
-        await captureScreenshot('fixed_ocr');
-    } else if (controller === 'fixed_ocr') {
-        await captureScreenshot('default');
-    } else {
-        await captureScreenshot(controller);
+        // 注册新的快捷键
+        await registerShortcuts(
+            config.shortcut_key.default,
+            captureScreenshot,
+            'default'
+        );
+
+        await registerShortcuts(
+            config.shortcut_key.fixed_copy,
+            captureScreenshot,
+            'fixed_copy'
+        );
+        await registerShortcuts(
+            config.shortcut_key.fixed_ocr,
+            captureScreenshot,
+            'fixed_ocr'
+        );
+
+        shortcutsRegistered = true;
+        console.log(controller, '注册快捷键成功');
+        return true;
+    } catch (error) {
+        console.error('注册主快捷键失败:', error);
+        throw error;
     }
 }
 
 export async function listenShortcuts() {
-    const windows = new Windows();
-    await listen('screenshots', (event: any) => {
-        console.log(event, '截图事件')
-        captureScreenshot();
-    });
-    //监听close_all_screenshots 事件，关闭所有截图窗口
-    await listen('close_all_screenshots', async (event: any) => {
-        console.log(event, '关闭所有截图窗口')
-        try {
-            const allWindows = await windows.getAllWin();
-            const closePromises = allWindows
-                .filter(window => window.label.startsWith('fixed') || window.label === 'Toolbar')
-                .map(async window => {
-                    try {
-                        const unlistenFn = await window.onCloseRequested(() => {});
-                        unlistenFn();
-                        
-                        await window.close();
-                        console.log(`Closed window: ${window.label}`);
-                    } catch (err) {
-                        console.error(`Failed to close window ${window.label}:`, err);
-                    }
-                });
+    if (shortcutsRegistered) {
+        return;
+    }
 
-            await Promise.all(closePromises);
-            console.log('All fixed windows and toolbars closed successfully');
-            
-            // 将库中所有窗口状态设置为0
-            await updateAuth('windowPool', {state: 0}, {1: 1});
-        } catch (error) {
-            console.error('Error closing windows:', error);
-        }
-    });
+    // 注册显示器切换事件监听器
+    await listenMonitorSwitch();
 
-    // 添加新的快捷键监听
-    await listen('shortcut_event', async (event: any) => {
-        console.log('快捷键事件触发', event.payload);
-        await captureScreenshotMain(event.payload);
-    });
+    // 读取快捷键配置
+    const shortcut_key = await invoke('read_config', {key: 'shortcut_key'}) as string;
+    if (!shortcut_key) {
+        return;
+    }
+
+    // 注册快捷键
+    console.log('注册快捷键:', shortcut_key)
+    try {
+        await register(shortcut_key, async () => {
+            await captureScreenshotMain();
+        });
+        shortcutsRegistered = true;
+    } catch (error) {
+        console.error('快捷键注册失败:', error);
+    }
+
+    // ... 其他事件监听设置 ...
 }
 
 export async function listenFixedWindows() {
-    console.log('开始监听固定窗口事件');
     try {
         await listen('windowPoolChanged', async (event: any) => {
             const { label } = event.payload;
-            console.log('收到固定窗口创建事件:', label);
             try {
                 const win = await windows.getWin(label)
-                console.log(win);
                 if (win) {
-                    console.log('成功获取窗口实例:', label);
-                    try {
-                        // 使用 onCloseRequested 处理关闭事件
-                        const unlistenFn = await win.onCloseRequested(async () => {
-                            console.log('触发窗口关闭事件:', label);
-                            try {
-                                // 添加窗口标签回到窗口池
-                                await updateAuth('windowPool', {state: 0, windowName: label}, {windowName: label})
-                            } catch (error) {
-                                console.error('处理窗口关闭事件时出错:', error);
+                    const unlistenFn = await win.onCloseRequested(async () => {
+                        try {
+                            // 这里只更新了数据库状态，没有处理工具栏窗口
+                            await updateAuth('windowPool', {state: 0, windowName: label}, {windowName: label})
+                            
+                            // 需要添加：如果没有其他固定窗口，则关闭工具栏
+                            const allWindows = await windows.getAllWin();
+                            const hasOtherFixedWindows = allWindows.some(w => 
+                                w.label.startsWith('fixed_') && w.label !== label
+                            );
+                            
+                            if (!hasOtherFixedWindows) {
+                                const toolbarWin = await windows.getWin('Toolbar');
+                                if (toolbarWin) {
+                                    await windows.closeWin('Toolbar');
+                                }
                             }
-                        });
+                        } catch (error) {
+                            console.error('处理窗口关闭事件时出错:', error);
+                        }
+                    });
 
-                        // 监听窗口销毁事件来清理监听器
-                        await win.once('tauri://destroyed', () => {
-                            // 移除 await，直接调用 unlistenFn
-                            unlistenFn();
-                        });
-
-                        console.log('关闭事件监听器设置完成:', label);
-                    } catch (error) {
-                        console.error('设置窗口关闭事件监听器时出错:', error);
-                    }
-                } else {
-                    console.error(`未能获取窗口实例: ${label}`);
+                    await win.once('tauri://destroyed', () => {
+                        unlistenFn();
+                    });
                 }
             } catch (error) {
                 console.error('处理固定窗口创建事件时出错:', error);
             }
         });
-        console.log('固定窗口事件监听器设置完成');
     } catch (error) {
         console.error('设置固定窗口事件监听器时出错:', error);
     }

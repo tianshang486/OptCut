@@ -4,14 +4,14 @@ import {Windows,} from '@/windows/create'
 import {onMounted, onUnmounted, Ref, ref, UnwrapRef, nextTick} from "vue";
 import {invoke} from "@tauri-apps/api/core";
 import {emit, listen} from "@tauri-apps/api/event";
-import {copyImage} from "@/windows/method.ts";
+import {copyImage, readFileImage} from "@/windows/method.ts";
 import {fabric} from 'fabric'
 import {writeText} from '@tauri-apps/plugin-clipboard-manager';
 import {PaintingTools} from '@/windows/painting'
 import {PhysicalPosition} from '@tauri-apps/api/window'
 import {queryAuth} from "@/windows/dbsql.ts";
 import {tencentOCR} from '@/windows/ocr';
-import { translateTexts} from '@/windows/translate'
+import {translateTexts} from '@/windows/translate'
 
 interface OcrItem {
   text: string;
@@ -25,12 +25,8 @@ const url: any = window.location.hash.slice(window.location.hash.indexOf('?') + 
 const path: any = new URLSearchParams(url).get('path')
 const operationalID: any = new URLSearchParams(url).get('operationalID')
 const label: any = new URLSearchParams(url).get('label')
-// 如果operationalID是fixed_copy则是直接复制图片到剪贴板,然后关闭窗口
-if (operationalID === 'fixed_copy') {
-  copyImage(path).then(() => {
-    NewWindows.closeWin(label)
-  })
-}
+
+
 
 // 从path路径http://asset.localhost/C:\Users\zxl\AppData\Local\Temp\AGCut_1731571102.png截取图片路径
 const image_path: any = ref(path.replace('http://asset.localhost/', ''))
@@ -40,7 +36,18 @@ const image_ocr = ref<{ code: any; data: OcrItem[] }>({
 });
 const is_ocr: Ref<UnwrapRef<boolean>, UnwrapRef<boolean> | boolean> = ref(false)
 // 用于跟踪菜单状态
-
+// 如果operationalID是fixed_copy则是直接复制图片到剪贴板,然后关闭窗口
+// if (operationalID === 'fixed_copy') {
+//   console.log('复制图片', path)
+//   copyImage(path)
+//   console.log('关闭窗口', label)
+//   NewWindows.closeWin(label)
+// }
+// if (operationalID === 'fixed_ocr') {
+// //   进行OCR识别
+//   console.log('OCR识别', path)
+//   emit('ocrImage',readFileImage(image_path.value))
+// }
 let menuBounds = {x: 0, y: 0, width: 50, height: 220};
 
 const win = new Windows()
@@ -68,28 +75,28 @@ const ocr = async () => {
   try {
     // 获取 OCR 模式
     const modeResult = await queryAuth(
-      'system_config', 
-      "SELECT config_value FROM system_config WHERE config_key = 'ocr_mode'"
+        'system_config',
+        "SELECT config_value FROM system_config WHERE config_key = 'ocr_mode'"
     ) as { config_value: string }[];
 
     const mode = modeResult[0]?.config_value || 'offline';
 
     let result: any;
-    
+
     if (mode === 'online') {
       // 使用腾讯云 OCR
       result = await tencentOCR(image_path.value);
     } else {
       // 使用离线 OCR
       const engineResult = await queryAuth(
-        'system_config', 
-        "SELECT config_value FROM system_config WHERE config_key = 'ocr_engine'"
+          'system_config',
+          "SELECT config_value FROM system_config WHERE config_key = 'ocr_engine'"
       ) as { config_value: string }[];
-      
+
       const engine = engineResult[0]?.config_value || 'RapidOCR';
       result = await invoke(
-        engine === 'RapidOCR' ? 'ps_ocr' : 'ps_ocr_pd',
-        { image_path: image_path.value }
+          engine === 'RapidOCR' ? 'ps_ocr' : 'ps_ocr_pd',
+          {image_path: image_path.value}
       );
     }
 
@@ -299,7 +306,24 @@ const handleCloseMenu = () => {
 };
 
 // 监听全局事件
-onMounted(() => {
+onMounted(async () => {
+  // 处理 fixed_copy 和 fixed_ocr
+  if (operationalID === 'fixed_copy') {
+    console.log('复制图片', path)
+    await copyImage(path)
+    console.log('关闭窗口', label)
+    await NewWindows.closeWin(label)
+  }
+  
+  if (operationalID === 'fixed_ocr') {
+    // 给一点延时确保组件完全加载
+    setTimeout(async () => {
+      console.log('OCR识别', path)
+      const img = await readFileImage(image_path.value)
+      await emit('ocrImage', img)
+    }, 500)
+  }
+
   // 监听右键菜单事件
   document.addEventListener('contextmenu', CreateContextMenu);
   // 监听点击事件关闭菜单
@@ -312,23 +336,7 @@ onMounted(() => {
       handleCloseMenu();
     }
   });
-});
 
-// 清理所有事件监听
-onUnmounted(() => {
-  document.removeEventListener('contextmenu', CreateContextMenu);
-  document.removeEventListener('click', handleCloseMenu);
-  window.removeEventListener('blur', handleCloseMenu);
-  document.removeEventListener('keydown', handleCloseMenu);
-  if (paintingTools) {
-    paintingTools.cleanup()
-  }
-});
-// 在 script setup 顶部添加 paintingTools 引用
-let paintingTools: PaintingTools | null = null
-
-// 将 canvas 初始化移 onMounted 中
-onMounted(() => {
   // 获取页面大小
   const img = new Image();
   img.src = path;
@@ -360,20 +368,35 @@ onMounted(() => {
     });
 
     // 创建工具栏窗口
-    let toolbarWin: any = null
-    toolbarWin = await NewWindows.createWin({
-      label: 'Toolbar',
-      url: `/#/painting-toolbar?sourceLabel=${label}`,
-      title: 'Toolbar',
-      width: 365,
-      height: 45,
-      decorations: false,
-      transparent: true,
-      alwaysOnTop: true,
-      shadow: false,
-      x: window.screenX,
-      y: window.screenY + img.height + 2,
-    }, {parent: label});
+    let toolbarWin: any = null;
+
+    const handleKeyDown = async (event: KeyboardEvent) => {
+      if (event.code === 'Space') {
+        event.preventDefault();
+
+        if (toolbarWin) {
+          // 如果工具栏存在，则关闭它
+          await NewWindows.closeWin('Toolbar');
+          toolbarWin = null;
+        } else {
+          // 如果工具栏不存在，则创建它
+          toolbarWin = await NewWindows.createWin({
+            label: 'Toolbar',
+            url: `/#/painting-toolbar?sourceLabel=${label}`,
+            width: 300,
+            height: 40,
+            x: 100,
+            y: 100,
+            decorations: false,
+            transparent: true,
+            alwaysOnTop: true,
+            skipTaskbar: true,
+          }, {parent: label});
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
 
     // 监听窗口关闭事件
     const currentWindow = await NewWindows.getWin(label);
@@ -385,8 +408,20 @@ onMounted(() => {
       });
     }
   };
-
 });
+
+// 清理所有事件监听
+onUnmounted(() => {
+  document.removeEventListener('contextmenu', CreateContextMenu);
+  document.removeEventListener('click', handleCloseMenu);
+  window.removeEventListener('blur', handleCloseMenu);
+  document.removeEventListener('keydown', handleCloseMenu);
+  if (paintingTools) {
+    paintingTools.cleanup()
+  }
+});
+// 在 script setup 顶部添加 paintingTools 引用
+let paintingTools: PaintingTools | null = null
 
 // 添加双击复制功能
 const copyText = async (text: string) => {
@@ -513,8 +548,14 @@ const calculateBoxWidth = (text: string, fontSize: number) => {
   return totalWidth; // 直接返回计算的总宽度，不再限制最大宽度
 };
 
-// 添加点击事件处理函数
+// 添加新的 ref 来跟踪当前显示的项目索引
+const activeIndex = ref<number | null>(null);
+
+// 修改点击事件处理函数
 const scrollToItem = (index: number) => {
+  // 更新当前激活的索引
+  activeIndex.value = activeIndex.value === index ? null : index;
+
   const itemElement = document.getElementById(`ocr-item-${index}`);
   if (itemElement) {
     // 移除之前的高亮
@@ -526,7 +567,7 @@ const scrollToItem = (index: number) => {
     itemElement.classList.add('highlight');
 
     // 滚动到对应项
-    itemElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    itemElement.scrollIntoView({behavior: 'smooth', block: 'center'});
   }
 };
 
@@ -566,6 +607,7 @@ const getCharWidth = (char: string) => {
             v-for="(item, index) in image_ocr.data"
             :key="index"
             class="ocr-text"
+            :class="{ 'ocr-text-visible': activeIndex === index }"
             :style="{
               left: `${Math.round(item.box[0][0])}px`,
               top: `${Math.round(item.box[0][1])}px`,
@@ -573,7 +615,7 @@ const getCharWidth = (char: string) => {
               lineHeight: `${calculateLineHeight(Math.abs(item.box[1][1] - item.box[2][1]))}px`,
               height: `${Math.abs(item.box[1][1] - item.box[2][1])}px`,
               whiteSpace: 'nowrap',
-              overflow: 'auto',  // 改为 auto，保留滚动功能
+              overflow: 'auto',
               textOverflow: 'unset',
               textAlign: 'left',
             }"
@@ -592,6 +634,8 @@ const getCharWidth = (char: string) => {
             :key="index"
             :id="`ocr-item-${index}`"
             class="flex items-start m-2 p-1 hover:bg-white/10 select-none ocr-list-item"
+            :class="{ 'highlight': activeIndex === index }"
+            @click="scrollToItem(index)"
         >
           <span
               class="min-w-[24px] mr-2 text-gray-500 text-right select-none"
@@ -686,15 +730,15 @@ const getCharWidth = (char: string) => {
   width: calc(100% - 300px);
   height: 100%;
   pointer-events: none;
-  overflow-x: auto;  
-  overflow-y: hidden;  
+  overflow-x: auto;
+  overflow-y: hidden;
   white-space: nowrap;
-  scrollbar-width: none;  /* 隐藏滚动条（Firefox） */
-  -ms-overflow-style: none;  /* 隐藏滚动条（IE/Edge） */
+  scrollbar-width: none; /* 隐藏滚动条（Firefox） */
+  -ms-overflow-style: none; /* 隐藏滚动条（IE/Edge） */
 }
 
 .ocr-overlay::-webkit-scrollbar {
-  display: none;  /* 隐藏滚动条（Chrome/Safari） */
+  display: none; /* 隐藏滚动条（Chrome/Safari） */
 }
 
 .ocr-text {
@@ -707,21 +751,39 @@ const getCharWidth = (char: string) => {
   padding: 0;
   margin: 0;
   z-index: 1000;
-  display: inline-block;  /* 改为 inline-block，让宽度自适应内容 */
-  max-width: 100%;  /* 添加最大宽度限制 */
-  overflow: auto;  /* 保留滚动功能 */
-  text-overflow: unset;  /* 不显示省略号 */
-  white-space: nowrap;  /* 不换行 */
+  display: inline-block;
+  max-width: 100%;
+  overflow: auto;
+  text-overflow: unset;
+  white-space: nowrap;
   text-align: left;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
 }
 
+/* 恢复悬停效果 */
 .ocr-text:hover {
+  opacity: 1;
   background: rgba(0, 0, 0, 0.6);
   outline: 2px solid rgba(33, 150, 243, 0.5);
   color: rgb(255, 255, 255);
-  z-index: 1001;  /* 确保悬停时在最上层 */
+  z-index: 1000; /* 低于点击激活的层级 */
+}
+
+/* 点击激活的样式 */
+.ocr-text-visible {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.6);
+  outline: 2px solid rgba(33, 150, 243, 0.5);
+  color: rgb(255, 255, 255);
+  z-index: 1001; /* 确保点击激活的文本在最上层 */
+}
+
+.highlight {
+  background-color: rgba(33, 150, 243, 0.2) !important;
+  outline: 2px solid rgba(33, 150, 243, 0.5);
 }
 
 /* 滚动条样式 */
@@ -733,11 +795,6 @@ const getCharWidth = (char: string) => {
 ::-webkit-scrollbar-thumb {
   background-color: #005cfd;
   border-radius: 5px;
-}
-
-.highlight {
-  background-color: rgba(33, 150, 243, 0.2) !important;  /* 高亮背景色 */
-  outline: 2px solid rgba(33, 150, 243, 0.5);  /* 高亮边框 */
 }
 
 /* 隐藏滚动条 */

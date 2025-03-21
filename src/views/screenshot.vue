@@ -294,28 +294,112 @@ const handleMouseUp = async (e: MouseEvent) => {
   }
 }
 
-// 全局鼠标移动处理
-const handleGlobalMouseMove = (e: MouseEvent) => {
+// 添加监控鼠标位置和屏幕边界的功能
+const monitors = ref<any[]>([]);
+const currentMonitorId = ref<number | null>(null);
+
+// 获取所有显示器信息
+const fetchMonitors = async () => {
+  try {
+    const monitorsData = await invoke('get_all_monitors');
+    monitors.value = JSON.parse(monitorsData as string);
+    console.log('获取到的显示器信息:', monitors.value);
+    
+    // 确定当前显示器
+    const urlParams = new URLSearchParams(window.location.hash.substring(window.location.hash.indexOf('?') + 1));
+    const monitorId = urlParams.get('monitorId');
+    if (monitorId) {
+      currentMonitorId.value = parseInt(monitorId);
+    }
+  } catch (error) {
+    console.error('获取显示器信息失败:', error);
+  }
+};
+
+// 检查鼠标是否在当前显示器内
+const checkMouseInCurrentMonitor = (x: number, y: number) => {
+  if (!monitors.value.length || currentMonitorId.value === null) return true;
+  
+  const currentMonitor = monitors.value.find(m => m.id === currentMonitorId.value);
+  if (!currentMonitor) return true;
+  
+  // 检查鼠标是否在当前显示器范围内
+  return x >= currentMonitor.x && 
+         x < (currentMonitor.x + currentMonitor.width) && 
+         y >= currentMonitor.y && 
+         y < (currentMonitor.y + currentMonitor.height);
+};
+
+// 修改全局鼠标移动处理函数
+const handleGlobalMouseMove = async (e: MouseEvent) => {
   mousePos.value = {
     x: e.clientX,
     y: e.clientY
   };
+  
+  // 获取鼠标的全局屏幕坐标并打印
+  const screenX = e.screenX;
+  const screenY = e.screenY;
+  console.log('鼠标全局坐标:', screenX, screenY);
+  
+  // 打印当前显示器信息
+  console.log('当前显示器ID:', currentMonitorId.value);
+  console.log('所有显示器:', monitors.value);
+  
+  // 检查鼠标是否离开当前显示器
+  const isInCurrentMonitor = checkMouseInCurrentMonitor(screenX, screenY);
+  console.log('是否在当前显示器内:', isInCurrentMonitor);
+  
+  if (!isInCurrentMonitor) {
+    console.log('鼠标移动到其他显示器，准备切换');
+    
+    // 找出鼠标当前所在的显示器
+    const targetMonitor = monitors.value.find(m => 
+      screenX >= m.x && 
+      screenX < (m.x + m.width) && 
+      screenY >= m.y && 
+      screenY < (m.y + m.height)
+    );
+    
+    if (targetMonitor) {
+      console.log('找到目标显示器:', targetMonitor);
+      try {
+        // 发送事件通知需要在新显示器上创建截图窗口
+        await emit('switch_monitor', {
+          monitorId: targetMonitor.id,
+          x: screenX,
+          y: screenY,
+          operationalID: operationalID
+        });
+        console.log('已发送切换显示器事件');
+        
+        // 关闭当前窗口
+        await win.closeWin('screenshot');
+        console.log('已关闭当前窗口');
+      } catch (error) {
+        console.error('切换显示器过程中出错:', error);
+      }
+    }
+  }
+  
   throttledUpdateColor(e.clientX, e.clientY);
 };
 
-// 添加事件监听
-onMounted(() => {
+// 确保在组件挂载时立即获取显示器信息
+onMounted(async () => {
   document.addEventListener('mousedown', handleMouseDown)
   document.addEventListener('mousemove', handleMouseMove)
   document.addEventListener('mouseup', handleMouseUp)
-  document.addEventListener('mousemove', handleGlobalMouseMove)
+  
+  // 立即获取显示器信息
+  await fetchMonitors();
+  console.log('组件挂载完成，显示器信息:', monitors.value);
 })
 
 onUnmounted(() => {
   document.removeEventListener('mousedown', handleMouseDown)
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', handleMouseUp)
-  document.removeEventListener('mousemove', handleGlobalMouseMove)
 })
 
 // 添加计算属性
@@ -358,11 +442,12 @@ const selectionHeight = computed(() => {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   overflow: hidden;
   margin: 0;
   padding: 0;
+  pointer-events: auto;
 }
 
 .screenshot-image {

@@ -26,10 +26,25 @@ export async function readFileImage(path: string) {
 // 复制图片到剪贴板
 export const copyImage = async (path: string) => {
     // await invoke("copied_to_clipboard", {image_path: path});
-    const img: any = await readFileImage(path);
-    await writeImage(img);
-};
+    try {
+        const img: any = await readFileImage(path.replace('http://asset.localhost/', ''));
+        // 如果失败则重试,如果提示线程没有打开的粘贴板，则需要打开粘贴板
+        try {
+            await writeImage(img);
+            // alert(path + " 复制成功");
+        } catch (e) {
+            console.error(e);
+            //   延迟2秒重试
+            setTimeout(() => {
+                copyImage(path);
+            }, 3000);
+        }
+    } catch (e) {
+        console.error('图片读取失败');
+        return;
+    }
 
+};
 export default {
     openDialog,
     readFileImage,
