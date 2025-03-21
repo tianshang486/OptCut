@@ -148,7 +148,38 @@ export async function listenShortcuts() {
         console.error('快捷键注册失败:', error);
     }
 
-    // ... 其他事件监听设置 ...
+    await listen('screenshots', (event: any) => {
+        console.log(event, '截图事件')
+        captureScreenshot();
+    });
+    //监听close_all_screenshots 事件，关闭所有截图窗口
+    await listen('close_all_screenshots', async (event: any) => {
+        console.log(event, '关闭所有截图窗口')
+        try {
+            const allWindows = await windows.getAllWin();
+            const closePromises = allWindows
+                .filter(window => window.label.startsWith('fixed') || window.label === 'Toolbar')
+                .map(async window => {
+                    try {
+                        const unlistenFn = await window.onCloseRequested(() => {});
+                        unlistenFn();
+
+                        await window.close();
+                        console.log(`Closed window: ${window.label}`);
+                    } catch (err) {
+                        console.error(`Failed to close window ${window.label}:`, err);
+                    }
+                });
+
+            await Promise.all(closePromises);
+            console.log('All fixed windows and toolbars closed successfully');
+
+            // 将库中所有窗口状态设置为0
+            await updateAuth('windowPool', {state: 0}, {1: 1});
+        } catch (error) {
+            console.error('Error closing windows:', error);
+        }
+    });
 }
 
 export async function listenFixedWindows() {
