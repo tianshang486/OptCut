@@ -12,6 +12,7 @@ import {PhysicalPosition} from '@tauri-apps/api/window'
 import {queryAuth} from "@/windows/dbsql.ts";
 import {tencentOCR} from '@/windows/ocr';
 import {translateTexts} from '@/windows/translate'
+import {showToast} from '@/utils/toast'
 
 interface OcrItem {
   text: string;
@@ -25,8 +26,6 @@ const url: any = window.location.hash.slice(window.location.hash.indexOf('?') + 
 const path: any = new URLSearchParams(url).get('path')
 const operationalID: any = new URLSearchParams(url).get('operationalID')
 const label: any = new URLSearchParams(url).get('label')
-
-
 
 // 从path路径http://asset.localhost/C:\Users\zxl\AppData\Local\Temp\AGCut_1731571102.png截取图片路径
 const image_path: any = ref(path.replace('http://asset.localhost/', ''))
@@ -141,8 +140,9 @@ const ocr = async () => {
         disableTools: true  // 添加标志表示禁用工具
       })
 
+      // 根据面板显示状态调整窗口大小
       const size = await getSize()
-      if (size !== null) {
+      if (size !== null && showOcrPanel.value) {
         resize(size.width + 300, size.height)
       }
     } else {
@@ -269,7 +269,7 @@ async function CreateContextMenu(event: any) {
   const y = event.screenY - 10;
 
   // 添加翻译状态到 URL 参数
-  const urlWithParams = `/#/contextmenu?path=${image_path.value}&label=${label}&is_ocr=${is_ocr.value}&is_translated=${isTranslated.value}`;
+  const urlWithParams = `/#/contextmenu?path=${image_path.value}&label=${label}&is_ocr=${is_ocr.value}&is_translated=${isTranslated.value}&show_ocr_panel=${showOcrPanel.value}`;
   console.log(urlWithParams)
 
   const options = {
@@ -305,8 +305,26 @@ const handleCloseMenu = () => {
   emit('close_menu')
 };
 
+// 控制 OCR 面板显示状态
+const showOcrPanel = ref(true);
+
+// 初始化 OCR 面板显示状态
+const initOcrPanelVisibility = async () => {
+  try {
+    const result = await queryAuth('system_config', 
+      "SELECT config_value FROM system_config WHERE config_key = 'ocr_panel_visible'"
+    ) as { config_value: string }[];
+    showOcrPanel.value = result[0]?.config_value === 'true';
+  } catch (error) {
+    console.error('获取 OCR 面板显示状态失败:', error);
+  }
+};
+
 // 监听全局事件
 onMounted(async () => {
+  // 初始化 OCR 面板显示状态
+  await initOcrPanelVisibility();
+  
   // 处理 fixed_copy 和 fixed_ocr
   if (operationalID === 'fixed_copy') {
     console.log('复制图片', path)
@@ -427,17 +445,10 @@ let paintingTools: PaintingTools | null = null
 const copyText = async (text: string) => {
   try {
     await writeText(text)
-    // 发送成功提示事件
-    await emit('show-alert', {
-      type: 'success',
-      message: '复制成功'
-    })
+    showToast('复制成功', 'success')
   } catch (error) {
     console.error('Failed to copy text:', error)
-    await emit('show-alert', {
-      type: 'error',
-      message: '复制失败'
-    })
+    showToast('复制失败', 'error')
   }
 }
 
@@ -510,6 +521,16 @@ listen('show-alert', (event: any) => {
     showAlert.value = false
   }, 2000)
 })
+
+// 监听切换 OCR 面板显示状态事件
+listen('toggleOcrPanel', async () => {
+  showOcrPanel.value = !showOcrPanel.value;
+  // 根据面板显示状态调整窗口大小
+  const size = await getSize()
+  if (size !== null) {
+    resize(size.width + (showOcrPanel.value ? 300 : -300), size.height)
+  }
+});
 
 // 修改 calculateFontSize 函数
 const calculateFontSize = (item: OcrItem) => {
@@ -601,7 +622,7 @@ const getCharWidth = (char: string) => {
 
     <!-- OCR 结果显示 -->
     <div class="content" v-if="is_ocr">
-      <!-- OCR 文本覆盖层 -->
+      <!-- OCR 文本覆盖层 - 始终显示 -->
       <div class="ocr-overlay" @mousedown.stop>
         <div
             v-for="(item, index) in image_ocr.data"
@@ -627,8 +648,8 @@ const getCharWidth = (char: string) => {
         </div>
       </div>
 
-      <!-- 右侧文本列表 -->
-      <div class="w-[300px] h-full box-border overflow-y-auto bg-neutral-700">
+      <!-- OCR 结果面板 - 可以显示/隐藏 -->
+      <div v-if="showOcrPanel" class="w-[300px] h-full box-border overflow-y-auto bg-neutral-700">
         <div
             v-for="(item, index) in image_ocr.data"
             :key="index"
@@ -637,13 +658,8 @@ const getCharWidth = (char: string) => {
             :class="{ 'highlight': activeIndex === index }"
             @click="scrollToItem(index)"
         >
-          <span
-              class="min-w-[24px] mr-2 text-gray-500 text-right select-none"
-          >{{ index + 1 }}</span>
-          <div
-              class="flex-1 break-all cursor-copy select-none"
-              @dblclick="copyText(item.text)"
-          >
+          <span class="min-w-[24px] mr-2 text-gray-500 text-right select-none">{{ index + 1 }}</span>
+          <div class="flex-1 break-all cursor-copy select-none" @dblclick="copyText(item.text)">
             <div v-if="isTranslated && item.translatedText">
               {{ item.translatedText }}
             </div>
@@ -727,7 +743,7 @@ const getCharWidth = (char: string) => {
 .ocr-overlay {
   flex: 1;
   position: relative;
-  width: calc(100% - 300px);
+  width: 100%;
   height: 100%;
   pointer-events: none;
   overflow-x: auto;

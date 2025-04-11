@@ -12,6 +12,23 @@
       <p class="text-sm text-gray-400 mt-1">选择 OCR 工作模式，在线模式需要配置相应的服务</p>
     </div>
 
+    <!-- OCR 面板设置 -->
+    <div class="p-4 bg-gray-800 rounded-lg">
+      <h3 class="text-lg font-semibold mb-3 text-gray-300">OCR 面板设置</h3>
+      <div class="flex items-center justify-between">
+        <span class="text-gray-300">默认显示 OCR 结果面板</span>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" v-model="ocrPanelVisible" class="sr-only peer" @change="updateOcrPanelVisibility">
+          <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer 
+                      peer-checked:after:translate-x-full peer-checked:after:border-white 
+                      after:content-[''] after:absolute after:top-[2px] after:left-[2px] 
+                      after:bg-white after:border-gray-300 after:border after:rounded-full 
+                      after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+        </label>
+      </div>
+      <p class="text-sm text-gray-400 mt-1">控制 OCR 识别后是否自动显示结果面板</p>
+    </div>
+
     <!-- 离线 OCR 设置 -->
     <div class="p-4 bg-gray-800 rounded-lg">
       <h3 class="text-lg font-semibold mb-3 text-gray-300">离线 OCR 设置</h3>
@@ -102,6 +119,8 @@ import { testTencentOCR } from '@/windows/ocr';
 
 // OCR 模式
 const ocrMode = ref('offline');
+// OCR 面板显示状态
+const ocrPanelVisible = ref(true);
 // OCR 引擎
 const ocrEngine = ref('RapidOCR');
 // 在线服务提供商
@@ -111,6 +130,19 @@ const tencentSecretId = ref('');
 const tencentSecretKey = ref('');
 const configTested = ref(false);
 
+// 更新 OCR 面板显示状态
+const updateOcrPanelVisibility = async () => {
+  try {
+    await updateAuth('system_config', 
+      { config_value: ocrPanelVisible.value.toString() }, 
+      { config_key: 'ocr_panel_visible' }
+    );
+  } catch (error) {
+    console.error('更新 OCR 面板显示状态失败:', error);
+    alert('更新设置失败: ' + error);
+  }
+};
+
 // 初始化配置
 const initConfig = async () => {
   const configs = await Promise.all([
@@ -118,7 +150,8 @@ const initConfig = async () => {
     queryAuth('system_config', "SELECT config_value FROM system_config WHERE config_key = 'ocr_engine'"),
     queryAuth('system_config', "SELECT config_value FROM system_config WHERE config_key = 'tencent_secret_id'"),
     queryAuth('system_config', "SELECT config_value FROM system_config WHERE config_key = 'tencent_secret_key'"),
-    queryAuth('system_config', "SELECT config_value FROM system_config WHERE config_key = 'tencent_ocr_enabled'")
+    queryAuth('system_config', "SELECT config_value FROM system_config WHERE config_key = 'tencent_ocr_enabled'"),
+    queryAuth('system_config', "SELECT config_value FROM system_config WHERE config_key = 'ocr_panel_visible'")
   ]) as { config_value: string }[][];
 
   ocrMode.value = configs[0][0]?.config_value || 'offline';
@@ -126,6 +159,7 @@ const initConfig = async () => {
   tencentSecretId.value = configs[2][0]?.config_value || '';
   tencentSecretKey.value = configs[3][0]?.config_value || '';
   configTested.value = configs[4][0]?.config_value === 'true';
+  ocrPanelVisible.value = configs[5][0]?.config_value === 'true';
 };
 
 // 测试腾讯云配置

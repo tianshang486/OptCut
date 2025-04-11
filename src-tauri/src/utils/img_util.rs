@@ -16,7 +16,6 @@ pub fn base64_decode(base64: &str) -> Vec<u8> {
     STANDARD.decode(base64).unwrap()
 }
 
-
 // pub fn rgba8_to_base64(img: &ImageData) -> String {
 //     let mut bytes: Vec<u8> = Vec::new();
 //     image::codecs::png::PngEncoder::new(BufWriter::new(Cursor::new(&mut bytes)))

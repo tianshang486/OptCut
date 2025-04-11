@@ -1,13 +1,13 @@
 use crate::utils::img_util::image_to_base64;
 use crate::utils::sql::init_db;
+use base64::Engine;
 use chrono::Utc;
+use hex;
+use hmac::{Hmac, Mac};
 use reqwest::Client;
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use std::path::Path;
-use hmac::{Hmac, Mac};
-use sha2::{Sha256, Digest};
-use base64::Engine;
-use hex;
 
 pub async fn get_tencent_config() -> Result<(String, String), String> {
     let pool = init_db().await?;
@@ -21,17 +21,20 @@ pub async fn get_tencent_config() -> Result<(String, String), String> {
     .map_err(|e| e.to_string())?;
 
     // 从结果中获取配置值
-    let secret_id = configs.iter()
+    let secret_id = configs
+        .iter()
         .find(|(key, _)| key == "tencent_secret_id")
         .map(|(_, value)| value.as_str())
         .unwrap_or("");
 
-    let secret_key = configs.iter()
+    let secret_key = configs
+        .iter()
         .find(|(key, _)| key == "tencent_secret_key")
         .map(|(_, value)| value.as_str())
         .unwrap_or("");
 
-    let enabled = configs.iter()
+    let enabled = configs
+        .iter()
         .find(|(key, _)| key == "tencent_ocr_enabled")
         .map(|(_, value)| value.as_str())
         .unwrap_or("false");
@@ -43,7 +46,7 @@ pub async fn get_tencent_config() -> Result<(String, String), String> {
     if secret_id.is_empty() || secret_key.is_empty() {
         return Err("腾讯云配置未设置".to_string());
     }
-    print!("腾讯云配置：{} {}" , secret_id, secret_key);
+    print!("腾讯云配置：{} {}", secret_id, secret_key);
     Ok((secret_id.to_string(), secret_key.to_string()))
 }
 
@@ -53,10 +56,13 @@ fn sign(key: &[u8], msg: &str) -> Vec<u8> {
     mac.finalize().into_bytes().to_vec()
 }
 
-pub async fn call_tencent_ocr(image_path: &str, secret_id: &str, secret_key: &str) -> Result<String, String> {
+pub async fn call_tencent_ocr(
+    image_path: &str,
+    secret_id: &str,
+    secret_key: &str,
+) -> Result<String, String> {
     let client = Client::new();
-    let base64_image = image_to_base64(Path::new(image_path))
-        .map_err(|e| e.to_string())?;
+    let base64_image = image_to_base64(Path::new(image_path)).map_err(|e| e.to_string())?;
 
     // 检查图片是否成功转换为 base64
     if base64_image.is_empty() {
@@ -77,34 +83,40 @@ pub async fn call_tencent_ocr(image_path: &str, secret_id: &str, secret_key: &st
     // 简化 payload
     let payload = json!({
         "ImageBase64": base64_image
-    }).to_string();
+    })
+    .to_string();
 
     // 步骤 1：拼接规范请求串
     let http_request_method = "POST";
     let canonical_uri = "/";
     let canonical_querystring = "";
     let ct = "application/json; charset=utf-8";
-    let canonical_headers = format!("content-type:{}\nhost:{}\nx-tc-action:{}\n",
-        ct, host, action.to_lowercase());
+    let canonical_headers = format!(
+        "content-type:{}\nhost:{}\nx-tc-action:{}\n",
+        ct,
+        host,
+        action.to_lowercase()
+    );
     let signed_headers = "content-type;host;x-tc-action";
     let hashed_request_payload = hex::encode(Sha256::digest(payload.as_bytes()));
 
-    let canonical_request = format!("{}\n{}\n{}\n{}\n{}\n{}",
+    let canonical_request = format!(
+        "{}\n{}\n{}\n{}\n{}\n{}",
         http_request_method,
         canonical_uri,
         canonical_querystring,
         canonical_headers,
         signed_headers,
-        hashed_request_payload);
+        hashed_request_payload
+    );
 
     // 步骤 2：拼接待签名字符串
     let credential_scope = format!("{}/{}/tc3_request", date, service);
     let hashed_canonical_request = hex::encode(Sha256::digest(canonical_request.as_bytes()));
-    let string_to_sign = format!("{}\n{}\n{}\n{}",
-        algorithm,
-        timestamp,
-        credential_scope,
-        hashed_canonical_request);
+    let string_to_sign = format!(
+        "{}\n{}\n{}\n{}",
+        algorithm, timestamp, credential_scope, hashed_canonical_request
+    );
 
     // 步骤 3：计算签名
     let secret_date = sign(format!("TC3{}", secret_key).as_bytes(), &date);
@@ -113,12 +125,10 @@ pub async fn call_tencent_ocr(image_path: &str, secret_id: &str, secret_key: &st
     let signature = hex::encode(sign(&secret_signing, &string_to_sign));
 
     // 步骤 4：拼接 Authorization
-    let authorization = format!("{} Credential={}/{}, SignedHeaders={}, Signature={}",
-        algorithm,
-        secret_id,
-        credential_scope,
-        signed_headers,
-        signature);
+    let authorization = format!(
+        "{} Credential={}/{}, SignedHeaders={}, Signature={}",
+        algorithm, secret_id, credential_scope, signed_headers, signature
+    );
 
     // 步骤 5：构造并发起请求
     let mut headers = reqwest::header::HeaderMap::new();
@@ -132,7 +142,8 @@ pub async fn call_tencent_ocr(image_path: &str, secret_id: &str, secret_key: &st
         headers.insert("X-TC-Region", region.parse().unwrap());
     }
 
-    let response = client.post(format!("https://{}", host))
+    let response = client
+        .post(format!("https://{}", host))
         .headers(headers)
         .body(payload)
         .send()
@@ -143,8 +154,8 @@ pub async fn call_tencent_ocr(image_path: &str, secret_id: &str, secret_key: &st
     println!("response_text: {}", response_text);
 
     // 解析腾讯云返回的 JSON
-    let json: serde_json::Value = serde_json::from_str(&response_text)
-        .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+    let json: serde_json::Value =
+        serde_json::from_str(&response_text).map_err(|e| format!("Failed to parse JSON: {}", e))?;
 
     // 转换结果格式
     let mut word_list = Vec::new();
@@ -181,6 +192,9 @@ pub async fn call_tencent_ocr(image_path: &str, secret_id: &str, secret_key: &st
         "code": 100,
         "data": word_list
     });
-    println!("OCR 结果: {}", serde_json::to_string_pretty(&result).unwrap());
+    println!(
+        "OCR 结果: {}",
+        serde_json::to_string_pretty(&result).unwrap()
+    );
     Ok(serde_json::to_string_pretty(&result).unwrap())
 }

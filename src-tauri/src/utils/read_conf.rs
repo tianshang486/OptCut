@@ -1,7 +1,7 @@
-use crate::utils::sql::{init_db, get_shortcut_keys};
+use crate::utils::sql::{get_shortcut_keys, init_db};
 use serde_json::json;
-use std::sync::OnceLock;
 use sqlx::SqlitePool;
+use std::sync::OnceLock;
 
 static DB_POOL: OnceLock<SqlitePool> = OnceLock::new();
 
@@ -14,10 +14,10 @@ pub async fn read_conf() -> Result<serde_json::Value, String> {
         DB_POOL.set(p.clone()).unwrap();
         DB_POOL.get().unwrap()
     };
-    
+
     // 查询快捷键配置
     let shortcut_keys = get_shortcut_keys(&pool).await?;
-    
+
     // 构建配置对象
     let config = json!({
         "shortcut_key": {

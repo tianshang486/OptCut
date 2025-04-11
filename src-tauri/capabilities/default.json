@@ -28,7 +28,8 @@
     "fixed_18",
     "fixed_19",
     "fixed_20",
-    "contextmenu"
+    "contextmenu",
+    "notification"
   ],
   "permissions": [
     "core:default",
@@ -63,6 +64,9 @@
     "sql:default",
     "sql:allow-close",
     "sql:allow-execute",
-    "sql:allow-select"
+    "sql:allow-select",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
   ]
 }

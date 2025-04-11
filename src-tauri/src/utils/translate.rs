@@ -1,9 +1,8 @@
-use serde::{Deserialize, Serialize};
-use reqwest;
-use rand;
-use md5;
-use tauri::command;
 use crate::utils::sql::init_db;
+use md5;
+use rand;
+use reqwest;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 struct TranslateResult {
@@ -17,7 +16,13 @@ struct TransResultItem {
     dst: String,
 }
 
-pub async fn baidu_translate(text: String, from: String, to: String, app_id: String, secret_key: String) -> Result<String, String> {
+pub async fn baidu_translate(
+    text: String,
+    from: String,
+    to: String,
+    app_id: String,
+    secret_key: String,
+) -> Result<String, String> {
     let salt = rand::random::<u32>().to_string();
     let sign = format!("{}{}{}{}", app_id, text, salt, secret_key);
     let sign = format!("{:x}", md5::compute(sign));
@@ -53,12 +58,14 @@ pub async fn get_baidu_config() -> Result<(String, String), String> {
         .map_err(|e| e.to_string())?;
 
     // 从结果中获取配置值
-    let app_id = configs.iter()
+    let app_id = configs
+        .iter()
         .find(|(key, _)| key == "baidu_app_id")
         .map(|(_, value)| value.as_str())
         .unwrap_or("");
 
-    let secret_key = configs.iter()
+    let secret_key = configs
+        .iter()
         .find(|(key, _)| key == "baidu_secret_key")
         .map(|(_, value)| value.as_str())
         .unwrap_or("");

@@ -1,16 +1,28 @@
 {
     "settings": {
       "title": "System Settings",
-      "autoStart": "Auto Start",
-      "autoStartDescription": "Enable to start the system automatically on boot.",
+      "font": "Font Settings",
+      "fontSearchPlaceholder": "Search fonts...",
+      "fontDescription": "Choose the font used in the application",
+      "defaultFont": "Default Font",
+      "systemFonts": "System Fonts",
       "language": "Interface Language",
-      "languageDescription": "Choose the display language of the system.",
+      "languageDescription": "Select the display language",
+      "autoStart": "Auto Start",
+      "autoStartDescription": "Set whether the application runs automatically at system startup",
       "checkUpdates": "Check for Updates",
+      "version": "Current Version",
       "updateStatus": {
-        "checking": "Checking...",
-        "latest": "You are on the latest version.",
-        "newVersion": "A new version is available."
-      },
-      "version": "Current Version"
+        "checking": "Checking for updates...",
+        "latest": "Up to date",
+        "newVersion": "New version available"
+      }
+    },
+    "menu": {
+      "system": "System",
+      "ocr": "OCR",
+      "shortcutKey": "Shortcuts",
+      "translate": "Translate",
+      "test": "Test"
     }
   }

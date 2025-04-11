@@ -7,14 +7,14 @@ use serde_json::json;
 use std::path::Path;
 use std::{env, os::windows::process::CommandExt, process::Command};
 // use paddleocr::Ppocr;
-use tauri::{Emitter, Manager};
-use xcap::{image, Monitor};
 use crate::utils::img_util::image_to_base64;
 use crate::utils::tencent_ocr::{call_tencent_ocr, get_tencent_config};
-use rand;
 use md5;
+use rand;
 use reqwest;
 use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::{Emitter, Manager};
+use xcap::{image, Monitor};
 
 static TRACKING: AtomicBool = AtomicBool::new(false);
 
@@ -136,13 +136,11 @@ pub async fn ps_ocr_pd(image_path: &str) -> Result<String, String> {
     // 获取输出并转换为字符串
     let stdout = String::from_utf8(output.stdout).unwrap();
     // 按换行符分割，获取JSON结果（最后一行）
-    let json_line = stdout.lines()
-        .last()
-        .unwrap_or_default();
+    let json_line = stdout.lines().last().unwrap_or_default();
 
     // 解析JSON并处理Unicode编码
-    let decoded_result: serde_json::Value = serde_json::from_str(json_line)
-        .map_err(|e| format!("解析JSON失败: {}", e))?;
+    let decoded_result: serde_json::Value =
+        serde_json::from_str(json_line).map_err(|e| format!("解析JSON失败: {}", e))?;
 
     print!("{:?}", decoded_result);
     Ok(decoded_result.to_string())
@@ -268,7 +266,10 @@ pub fn delete_temp_file() {
 // 添加新的tauri命令
 #[tauri::command(rename_all = "snake_case")]
 pub async fn read_config() -> Result<String, String> {
-    println!("read_config called from: {:?}", std::backtrace::Backtrace::capture());  // 添加调用栈跟踪
+    println!(
+        "read_config called from: {:?}",
+        std::backtrace::Backtrace::capture()
+    ); // 添加调用栈跟踪
     read_conf()
         .await
         .map(|config| serde_json::to_string(&config).unwrap_or_default())
@@ -311,7 +312,7 @@ pub struct ShortcutConfig {
 #[tauri::command]
 pub async fn save_shortcuts(shortcuts: ShortcutConfig) -> Result<(), String> {
     let pool = init_db().await?;
-    
+
     // 更新每个快捷键
     sqlx::query("UPDATE shortcutKey SET shortcut_key = ? WHERE function = ?")
         .bind(&shortcuts.default)
@@ -319,14 +320,14 @@ pub async fn save_shortcuts(shortcuts: ShortcutConfig) -> Result<(), String> {
         .execute(&pool)
         .await
         .map_err(|e| e.to_string())?;
-        
+
     sqlx::query("UPDATE shortcutKey SET shortcut_key = ? WHERE function = ?")
         .bind(&shortcuts.fixed_copy)
         .bind("fixed_copy")
         .execute(&pool)
         .await
         .map_err(|e| e.to_string())?;
-        
+
     sqlx::query("UPDATE shortcutKey SET shortcut_key = ? WHERE function = ?")
         .bind(&shortcuts.fixed_ocr)
         .bind("fixed_ocr")
@@ -350,13 +351,13 @@ pub async fn restart_app(app_handle: tauri::AppHandle) -> Result<(), String> {
     #[cfg(not(debug_assertions))]
     {
         // 生产环境下的重启逻辑
-        let current_exe = env::current_exe()
-            .map_err(|e| format!("Failed to get current exe path: {}", e))?;
-        
+        let current_exe =
+            env::current_exe().map_err(|e| format!("Failed to get current exe path: {}", e))?;
+
         Command::new(&current_exe)
             .spawn()
             .map_err(|e| format!("Failed to start new process: {}", e))?;
-        
+
         app_handle.exit(0);
     }
 
@@ -365,8 +366,7 @@ pub async fn restart_app(app_handle: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn read_image_base64(path: String) -> Result<String, String> {
-    image_to_base64(Path::new(&path))
-        .map_err(|e| e.to_string())
+    image_to_base64(Path::new(&path)).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -376,12 +376,10 @@ pub async fn tencent_ocr(image_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn tencent_ocr_test (secret_id: String, secret_key: String) -> Result<bool, String> {
+pub async fn tencent_ocr_test(secret_id: String, secret_key: String) -> Result<bool, String> {
     let result = call_tencent_ocr("tools/img.png", &secret_id, &secret_key).await?;
     Ok(!result.contains("Error"))
 }
-
-
 
 #[tauri::command]
 pub async fn baidu_translate(text: String, from: String, to: String) -> Result<String, String> {
@@ -391,7 +389,13 @@ pub async fn baidu_translate(text: String, from: String, to: String) -> Result<S
 
 // 添加百度翻译测试接口
 #[tauri::command]
-pub async fn baidu_translate_test(text: String, from: String, to: String, app_id: String, secret_key: String) -> Result<String, String> {
+pub async fn baidu_translate_test(
+    text: String,
+    from: String,
+    to: String,
+    app_id: String,
+    secret_key: String,
+) -> Result<String, String> {
     translate::baidu_translate(text, from, to, app_id, secret_key).await
 }
 
@@ -399,18 +403,21 @@ pub async fn baidu_translate_test(text: String, from: String, to: String, app_id
 #[tauri::command]
 pub fn get_all_monitors() -> Result<String, String> {
     let monitors = xcap::Monitor::all().map_err(|e| e.to_string())?;
-    
-    let monitors_info: Vec<serde_json::Value> = monitors.iter().map(|monitor| {
-        json!({
-            "id": monitor.id().unwrap_or_default(),
-            "x": monitor.x().unwrap_or_default(),
-            "y": monitor.y().unwrap_or_default(),
-            "width": monitor.width().unwrap_or_default(),
-            "height": monitor.height().unwrap_or_default(),
-            "is_primary": monitor.is_primary().unwrap_or_default()
+
+    let monitors_info: Vec<serde_json::Value> = monitors
+        .iter()
+        .map(|monitor| {
+            json!({
+                "id": monitor.id().unwrap_or_default(),
+                "x": monitor.x().unwrap_or_default(),
+                "y": monitor.y().unwrap_or_default(),
+                "width": monitor.width().unwrap_or_default(),
+                "height": monitor.height().unwrap_or_default(),
+                "is_primary": monitor.is_primary().unwrap_or_default()
+            })
         })
-    }).collect();
-    
+        .collect();
+
     Ok(serde_json::to_string(&monitors_info).unwrap())
 }
 
@@ -441,15 +448,21 @@ pub async fn track_mouse_position(app_handle: tauri::AppHandle) -> Result<(), St
                         let monitor_y = monitor.y().unwrap_or_default();
                         let monitor_width = monitor.width().unwrap_or_default();
                         let monitor_height = monitor.height().unwrap_or_default();
-                        
-                        if x >= monitor_x && x < (monitor_x + monitor_width as i32) &&
-                           y >= monitor_y && y < (monitor_y + monitor_height as i32) {
+
+                        if x >= monitor_x
+                            && x < (monitor_x + monitor_width as i32)
+                            && y >= monitor_y
+                            && y < (monitor_y + monitor_height as i32)
+                        {
                             let monitor_id = monitor.id().unwrap_or_default();
                             if last_monitor_id != monitor_id {
                                 last_monitor_id = monitor_id;
-                                let _ = app_handle.emit("switch_monitor", json!({
-                                    "monitor_id": monitor_id
-                                }));
+                                let _ = app_handle.emit(
+                                    "switch_monitor",
+                                    json!({
+                                        "monitor_id": monitor_id
+                                    }),
+                                );
                             }
                             break;
                         }

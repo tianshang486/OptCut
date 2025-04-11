@@ -1,6 +1,6 @@
-use std::env;
-use sqlx::{FromRow, SqlitePool};
 use serde::{Deserialize, Serialize};
+use sqlx::{FromRow, SqlitePool};
+use std::env;
 use std::path::PathBuf;
 
 // 初始化数据库和配置表
@@ -51,10 +51,11 @@ pub async fn query_tables(pool: &SqlitePool) -> Result<Vec<String>, String> {
         name: String,
     }
 
-    let tables: Vec<TableName> = sqlx::query_as("SELECT name FROM sqlite_master WHERE type='table'")
-        .fetch_all(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let tables: Vec<TableName> =
+        sqlx::query_as("SELECT name FROM sqlite_master WHERE type='table'")
+            .fetch_all(pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
     let table_names: Vec<String> = tables.into_iter().map(|row| row.name).collect();
     Ok(table_names)
@@ -83,8 +84,6 @@ struct User {
     name: String,
 }
 
-
-
 // 快捷键表结构
 #[derive(FromRow, Serialize, Deserialize)]
 pub struct ShortcutKey {
@@ -102,5 +101,3 @@ pub async fn get_shortcut_keys(pool: &SqlitePool) -> Result<Vec<ShortcutKey>, St
 
     Ok(shortcut_keys)
 }
-
-

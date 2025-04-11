@@ -65,12 +65,15 @@ pub fn get_migrations() -> Vec<Migration> {
                 ('language', 'zh-CN', '界面语言'),
                 ('ocr_engine', 'RapidOCR', '离线OCR引擎'),
                 ('ocr_mode', 'offline', 'OCR模式：online/offline'),
+                ('ocr_panel_visible', 'true', 'OCR结果面板显示状态'),
                 ('tencent_secret_id', '', '腾讯云SecretId'),
                 ('tencent_secret_key', '', '腾讯云SecretKey'),
                 ('tencent_ocr_enabled', 'false', '腾讯云OCR是否启用'),
                 ('baidu_app_id', '', '百度翻译App ID'),
                 ('baidu_secret_key', '', '百度翻译Secret Key'),
-                ('translate_enabled', 'false', '翻译功能是否启用');
+                ('translate_enabled', 'false', '翻译功能是否启用'),
+                ('font', 'system-ui, -apple-system, BlinkMacSystemFont, ''Segoe UI'', ''PingFang SC'', ''Hiragino Sans GB'', ''Microsoft YaHei'', ''Helvetica Neue'', Helvetica, Arial, sans-serif', '系统默认字体'),
+                ('autostart', 'false', '开机自启动');
             
             -- 创建翻译历史表
             CREATE TABLE IF NOT EXISTS translate_history (

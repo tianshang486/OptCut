@@ -16,6 +16,7 @@ import {writeImage} from "@tauri-apps/plugin-clipboard-manager";
 import {Image} from "@tauri-apps/api/image";
 import {Windows,} from '@/windows/create'
 import {emit, listen} from "@tauri-apps/api/event";
+import { updateAuth} from '@/windows/dbsql';
 // 禁用默认右键菜单
 document.addEventListener('contextmenu', (event) => {
   event.preventDefault();
@@ -28,6 +29,7 @@ const image_path: any = ref(params.get('path'))
 const label: any = ref(params.get('label'))
 const is_ocr: any = ref(params.get('is_ocr') === 'true') // 获取 OCR 状态
 const is_translated: any = ref(params.get('is_translated') === 'true') // 从 URL 获取翻译状态
+const show_ocr_panel: any = ref(params.get('show_ocr_panel') === 'true') // 获取 OCR 面板显示状态
 console.log(image_path.value, label.value,'父信息')// const image_ocr: any = ref([])
 // const activeIndex = ref('1')
 const menuItems = [
@@ -56,6 +58,21 @@ const menuItems = [
       emit('ocrImage', null)
       is_translated.value = false // 重置翻译状态
       NewWindows.closeWin('contextmenu')
+    },
+    disabled: !is_ocr.value // 未 OCR 时禁用
+  },
+  { 
+    label: show_ocr_panel.value ? '隐藏OCR面板' : '显示OCR面板', 
+    handler: async () => {
+      // 更新数据库配置
+      await updateAuth('system_config', 
+        { config_value: (!show_ocr_panel.value).toString() }, 
+        { config_key: 'ocr_panel_visible' }
+      );
+      // 发送事件更新界面
+      await emit('toggleOcrPanel')
+      show_ocr_panel.value = !show_ocr_panel.value
+      await NewWindows.closeWin('contextmenu')
     },
     disabled: !is_ocr.value // 未 OCR 时禁用
   },
@@ -191,7 +208,6 @@ const isReady = ref(false)
 </script>
 
 <style>
-
 :root {
   margin: 0 !important;
   padding: 0 !important;
@@ -210,6 +226,7 @@ const isReady = ref(false)
   opacity: 0;
   transform: scale(0.95);
   transition: all 0.1s ease-out;
+  font-family: inherit;
 }
 
 .menu-show {
@@ -229,6 +246,7 @@ const isReady = ref(false)
   background: #2b2b2b;
   user-select: none;
   min-height: 22px;
+  font-family: inherit;
 }
 
 .v3-context-menu-item:hover {
