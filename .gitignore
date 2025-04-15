@@ -25,3 +25,4 @@ dist-ssr
 /src-tauri/tools/win-BIN-CPU-x64
 target
 /setup/*.exe
+/fonts/
