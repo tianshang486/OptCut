@@ -61,13 +61,15 @@ const baiduConfigTested = ref(false);
 
 // 初始化配置
 const initConfig = async () => {
-  const [baiduAppIdResult, baiduSecretKeyResult] = await Promise.all([
+  const [baiduAppIdResult, baiduSecretKeyResult, translateEnabledResult] = await Promise.all([
     queryAuth('system_config', "SELECT config_value FROM system_config WHERE config_key = 'baidu_app_id'"),
-    queryAuth('system_config', "SELECT config_value FROM system_config WHERE config_key = 'baidu_secret_key'")
+    queryAuth('system_config', "SELECT config_value FROM system_config WHERE config_key = 'baidu_secret_key'"),
+    queryAuth('system_config', "SELECT config_value FROM system_config WHERE config_key = 'translate_enabled'"),
   ]) as { config_value: string }[][];
 
   baiduAppId.value = baiduAppIdResult[0]?.config_value || '';
   baiduSecretKey.value = baiduSecretKeyResult[0]?.config_value || '';
+  baiduConfigTested.value = translateEnabledResult[0]?.config_value === 'true' || false;
 };
 
 // 测试百度翻译配置
@@ -101,7 +103,9 @@ const saveBaiduConfig = async () => {
       return;
     }
 
-    await saveBaiduConfigApi(baiduAppId.value, baiduSecretKey.value);
+    await saveBaiduConfigApi(baiduAppId.value, baiduSecretKey.value, true);
+    // 更新translate_enabled状态为true
+
     alert('百度翻译配置保存成功！');
   } catch (error) {
     console.error('保存百度翻译配置失败:', error);

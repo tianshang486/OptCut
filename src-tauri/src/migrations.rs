@@ -17,8 +17,9 @@ pub fn get_migrations() -> Vec<Migration> {
             INSERT INTO shortcutKey (shortcut_key, function) VALUES
                 ('ctrl+alt+q', 'default'),
                 ('ctrl+alt+w', 'fixed_copy'),
-                ('ctrl+alt+e', 'fixed_ocr');
-            
+                ('ctrl+alt+e', 'fixed_ocr'),
+                ('alt+p', 'paste_img');
+
             -- 创建窗口池表
             CREATE TABLE IF NOT EXISTS windowPool (
                 id INTEGER PRIMARY KEY,
@@ -72,6 +73,8 @@ pub fn get_migrations() -> Vec<Migration> {
                 ('baidu_app_id', '', '百度翻译App ID'),
                 ('baidu_secret_key', '', '百度翻译Secret Key'),
                 ('translate_enabled', 'false', '翻译功能是否启用'),
+                ('translate_from', 'auto', '翻译源语言'),
+                ('translate_to', 'zh', '翻译目标语言'),
                 ('font', 'system-ui, -apple-system, BlinkMacSystemFont, ''Segoe UI'', ''PingFang SC'', ''Hiragino Sans GB'', ''Microsoft YaHei'', ''Helvetica Neue'', Helvetica, Arial, sans-serif', '系统默认字体'),
                 ('autostart', 'false', '开机自启动');
             

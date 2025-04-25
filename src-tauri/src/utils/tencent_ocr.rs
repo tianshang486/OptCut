@@ -1,6 +1,5 @@
 use crate::utils::img_util::image_to_base64;
 use crate::utils::sql::init_db;
-use base64::Engine;
 use chrono::Utc;
 use hex;
 use hmac::{Hmac, Mac};

@@ -3,16 +3,15 @@ mod commands;
 mod font;
 mod migrations;
 mod utils;
-use tauri_plugin_autostart::MacosLauncher;
-use tauri_plugin_autostart::ManagerExt;
+
 use crate::commands::{
     baidu_translate, baidu_translate_test, capture_screen_fixed, capture_screen_one,
     delete_temp_file, get_all_monitors, get_color_at, ps_ocr, ps_ocr_pd, query_database_info,
     read_config, restart_app, save_shortcuts, stop_mouse_tracking, tencent_ocr, tencent_ocr_test,
-    track_mouse_position,
+    track_mouse_position,write_image,get_mouse_position
 };
 use font::get_system_fonts;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_sql::Builder;
 use utils::tray;
@@ -30,7 +29,7 @@ use utils::tray;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_autostart::Builder::new().args(["--flag1", "--flag2"]).build())
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_fs::init())
@@ -61,6 +60,8 @@ pub fn run() {
             track_mouse_position,
             stop_mouse_tracking,
             get_system_fonts,
+            write_image,
+            get_mouse_position,
         ])
         // 阻止默认关闭事件,弹窗提示是否关闭窗口
         .on_window_event(|window, event| match event {
@@ -121,7 +122,7 @@ pub fn run() {
                 //                 if shortcut.matches(Modifiers::CONTROL | Modifiers::ALT, Code::KeyE)
                 //                 {
                 //                     let _ = app.emit("shortcut_event", "fixed_copy");
-                //                     println!("ctrl+alt+e");
+                //                     println!("ctrl+alt pub(crate)+e");
                 //                 }
                 //             }
                 //         })

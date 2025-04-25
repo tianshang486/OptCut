@@ -1,11 +1,28 @@
 <template>
   <div v-if="isReady" class="v3-context-menu" :class="{ 'menu-show': isReady }">
-    <div class="v3-context-menu-item"
-         v-for="item in menuItems"
-         :key="item.label"
-         :class="{ 'disabled': item.disabled }"
-         @click="!item.disabled && handleSelect(item.label)">
-      <span>{{ item.label }}</span>
+    <div v-for="item in menuItems" :key="item.label">
+      <!-- 普通菜单项 -->
+      <div v-if="!item.children"
+           class="v3-context-menu-item"
+           :class="{ 'disabled': item.disabled }"
+           @click="!item.disabled && handleSelect(item.label)">
+        <span>{{ item.label }}</span>
+      </div>
+      <!-- 子菜单项 -->
+      <div v-else class="v3-context-submenu" :class="{ 'disabled': item.disabled }">
+        <div class="v3-context-menu-item submenu-trigger">
+          <span>{{ item.label }}</span>
+          <span class="submenu-arrow">▶</span>
+        </div>
+        <div class="submenu-content">
+          <div v-for="child in item.children"
+               :key="child.label"
+               class="v3-context-menu-item"
+               @click="child.handler">
+            <span>{{ child.label }}</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -16,7 +33,20 @@ import {writeImage} from "@tauri-apps/plugin-clipboard-manager";
 import {Image} from "@tauri-apps/api/image";
 import {Windows,} from '@/windows/create'
 import {emit, listen} from "@tauri-apps/api/event";
-import { updateAuth} from '@/windows/dbsql';
+import { updateAuth, queryAuth } from '@/windows/dbsql';
+
+
+// 定义菜单项类型
+interface MenuItem {
+  label: string;
+  handler: (() => void) | (() => Promise<void>) | null;
+  disabled: boolean;
+  children?: {
+    label: string;
+    handler: (() => void) | (() => Promise<void>);
+  }[];
+}
+
 // 禁用默认右键菜单
 document.addEventListener('contextmenu', (event) => {
   event.preventDefault();
@@ -32,7 +62,8 @@ const is_translated: any = ref(params.get('is_translated') === 'true') // 从 UR
 const show_ocr_panel: any = ref(params.get('show_ocr_panel') === 'true') // 获取 OCR 面板显示状态
 console.log(image_path.value, label.value,'父信息')// const image_ocr: any = ref([])
 // const activeIndex = ref('1')
-const menuItems = [
+
+const menuItems: MenuItem[] = [
   { 
     label: '复制', 
     handler: () => copyImage(image_path.value).then(() => NewWindows.closeWin('contextmenu')),
@@ -62,7 +93,7 @@ const menuItems = [
     disabled: !is_ocr.value // 未 OCR 时禁用
   },
   { 
-    label: show_ocr_panel.value ? '隐藏OCR面板' : '显示OCR面板', 
+    label: show_ocr_panel.value ? '隐藏展示栏' : '显示展示栏',
     handler: async () => {
       // 更新数据库配置
       await updateAuth('system_config', 
@@ -79,11 +110,58 @@ const menuItems = [
   { 
     label: '翻译', 
     handler: async () => {
-      await emit('translateText')
-      is_translated.value = true
-      await NewWindows.closeWin('contextmenu')
+      // 获取当前的语言设置
+      const [fromResult, toResult] = await Promise.all([
+        queryAuth('system_config', "SELECT config_value FROM system_config WHERE config_key = 'translate_from'"),
+        queryAuth('system_config', "SELECT config_value FROM system_config WHERE config_key = 'translate_to'")
+      ]);
+      console.log('翻译', fromResult)
+      const from = fromResult[0]?.config_value || '错误';
+      const to = toResult[0]?.config_value || '错误';
+      console.log('翻译', from + '->' + to)
+      // 发送翻译事件，包含语言设置
+      await emit('translateText', { from, to });
+      is_translated.value = true;
+      await NewWindows.closeWin('contextmenu');
     },
     disabled: !is_ocr.value || is_translated.value // 未 OCR 或已翻译时禁用
+  },
+  { 
+    label: '翻译设置', 
+    handler: async () => {
+      const sourceLabel = label.value;
+      const currentWindow = await NewWindows.getWin(sourceLabel);
+      let x = 100;
+      let y = 100;
+      
+      // 获取当前窗口位置设置翻译窗口位置
+      if (currentWindow) {
+        const position = await currentWindow.outerPosition();
+        x = position.x;
+        y = position.y - 40; // 设置在窗口顶部上方
+        
+        // 重要：监听窗口关闭事件
+        await currentWindow.onCloseRequested(async () => {
+          await NewWindows.closeWin('translate_settings');
+        });
+      }
+      
+      await NewWindows.createWin({
+        label: 'translate_settings',
+        url: `/#/translate-settings?sourceLabel=${sourceLabel}`,
+        width: 240,
+        height: 40,
+        x: x,
+        y: y,
+        decorations: false,
+        transparent: true,
+        alwaysOnTop: true,
+        skipTaskbar: true,
+      }, {});
+      
+      await NewWindows.closeWin('contextmenu');
+    },
+    disabled: false
   },
   { 
     label: '取消翻译', 
@@ -130,12 +208,6 @@ listen('translationStatus', (event: any) => {
   console.log('Translation status updated:', is_translated.value) // 添加日志
 })
 
-// 监听翻译事件
-listen('translateText', async (event: any) => {
-  is_translated.value = true
-  console.log('Translation completed, status:', is_translated.value) // 添加日志
-  await emit('translateText', event.payload)
-})
 
 // 使用getWin 获取父窗口是否存在,不存在则关闭子窗口
 // 持续检查父窗口是否存在
@@ -262,5 +334,47 @@ const isReady = ref(false)
 
 .v3-context-menu-item.disabled:hover {
   background: #2b2b2b; /* 禁用时不显示悬停效果 */
+}
+
+/* 添加子菜单样式 */
+.v3-context-submenu {
+  position: relative;
+}
+
+.submenu-trigger {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-right: 24px;
+}
+
+.submenu-arrow {
+  font-size: 10px;
+  margin-left: 8px;
+}
+
+.submenu-content {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  min-width: 120px;
+  background: #2b2b2b;
+  border-radius: 5px;
+  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.2);
+  display: none;
+}
+
+.v3-context-submenu:hover > .submenu-content {
+  display: block;
+}
+
+.v3-context-submenu.disabled > .submenu-trigger {
+  opacity: 0.5;
+  cursor: not-allowed;
+  color: #888;
+}
+
+.v3-context-submenu.disabled:hover > .submenu-content {
+  display: none;
 }
 </style>

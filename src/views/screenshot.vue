@@ -1,35 +1,21 @@
 <script setup lang="ts">
 import {Windows,} from '@/windows/create'
-import {copyImage,} from '@/windows/method'
+import {copyImage, createScreenshotWindow,} from '@/windows/method'
 import {computed, onMounted, onUnmounted, ref} from "vue";
 import {PhysicalPosition} from '@tauri-apps/api/window';
-import {convertFileSrc, invoke} from "@tauri-apps/api/core";
-import {queryAuth, updateAuth} from '@/windows/dbsql'
+import {invoke} from "@tauri-apps/api/core";
 import {emit} from "@tauri-apps/api/event";
 // 从url中获取截图路径?path=' + result.path,
 const urlParams = new URLSearchParams(window.location.hash.substring(window.location.hash.indexOf('?') + 1));
 const path: any = urlParams.get('path');
-const operationalID = urlParams.get('operationalID');
+const operationalID:any = urlParams.get('operationalID');
 console.log('截图路径', path)
-// 删除窗口的函数,将state设置为0
-const removeWindowFromPool = (windowName: string) => {
-  updateAuth('windowPool', {state: 1, windowName: windowName}, {windowName: windowName})
-}
 
 // 读取窗口池中的窗口信息
 // 将异步操作移到 ref 中
 const windowPool = ref<any>([]);
 
-// 初始化函数
-const initWindowPool = async () => {
-  try {
-    windowPool.value = await queryAuth('windowPool', 'SELECT windowName FROM windowPool WHERE state = 0');
-    console.log('窗口池', windowPool.value);
-  } catch (error) {
-    console.error('查询窗口池失败:', error);
-    windowPool.value = [];
-  }
-};
+
 
 console.log('窗口池', windowPool)
 
@@ -186,7 +172,6 @@ interface ScreenshotResult {
   window_x: number;
   window_y: number;
 }
-
 // 修改鼠标抬起事件处理
 const handleMouseUp = async (e: MouseEvent) => {
   if (!isMouseDown) return;
@@ -236,59 +221,14 @@ const handleMouseUp = async (e: MouseEvent) => {
   if (width <= 2 && height <= 2) {
     console.log('误操作忽律');
   } else if (e.button === 0) { // 只在左键点击时执行区域截图
-    console.log('截图区域');windowPool
+    console.log('截图区域');
     const result: ScreenshotResult = JSON.parse(await invoke('capture_screen_fixed', {
       x: x,
       y: y,
       width: width,
       height: height,
     }));
-    const imgUrl = convertFileSrc(result.path);
-    // 刷新窗口池
-
-    const win_fixed = new Windows();
-    // 注入全局状态
-    await initWindowPool();
-
-    const fixed_label = windowPool.value[0]?.windowName;  // 安全地获取第一个窗口名
-    if (fixed_label) {
-      removeWindowFromPool(fixed_label)
-      console.log('窗口池选择', fixed_label)
-      
-      const url = `/#/fixed?path=${imgUrl}&operationalID=${operationalID}&label=${fixed_label}`;
-      console.log('窗口大小', width, height, '窗口位置', x, y, '图片路径', result.path)
-      
-      const windowOptions = {
-        label: fixed_label,
-        title: fixed_label,
-        url: url,
-        width: width,
-        height: height,
-        x: x,
-        y: y ,
-        resizable: true,
-        fullscreen: false,
-        maximized: false,
-        transparent: true,
-        center: false,
-        decorations: false,
-        focus: true,
-
-      };
-      
-      // 先创建窗口
-      await win_fixed.createWin(windowOptions, result.path);
-      
-      // 等待窗口创建完成
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // 再发送事件
-      await emit('windowPoolChanged', {
-        label: fixed_label
-      });
-      // 关闭当前窗口
-      await win.closeWin('screenshot')
-    }
+    await createScreenshotWindow(x, y, width, height,operationalID,result);
   } else { // 其他情况忽略
     alert('浮窗数量已达到上限，请关闭部分窗口后再试')
   }

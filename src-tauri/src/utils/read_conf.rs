@@ -24,6 +24,7 @@ pub async fn read_conf() -> Result<serde_json::Value, String> {
             "default": shortcut_keys.iter().find(|&x| x.function == "default").map_or("", |x| &x.shortcut_key),
             "fixed_copy": shortcut_keys.iter().find(|&x| x.function == "fixed_copy").map_or("", |x| &x.shortcut_key),
             "fixed_ocr": shortcut_keys.iter().find(|&x| x.function == "fixed_ocr").map_or("", |x| &x.shortcut_key),
+            "paste_img" : shortcut_keys.iter().find(|&x| x.function == "paste_img").map_or("", |x| &x.shortcut_key),
         }
     });
 

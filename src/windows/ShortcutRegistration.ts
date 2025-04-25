@@ -5,6 +5,8 @@ import {updateAuth} from '@/windows/dbsql'
 import {isRegistered, register, ShortcutEvent, unregister} from "@tauri-apps/plugin-global-shortcut";
 import {invoke} from "@tauri-apps/api/core";
 import {captureScreenshotMain} from "@/windows/CaptureScreenshotMain.ts";
+import {readImage} from "@tauri-apps/plugin-clipboard-manager"
+import {createScreenshotWindow} from "@/windows/method.ts";
 
 const windows = new Windows();
 let shortcutsRegistered = false; // 添加标志来防止重复注册
@@ -20,11 +22,11 @@ let shortcutsRegistered = false; // 添加标志来防止重复注册
 // 注册快捷键
 export async function registerShortcuts(shortcut_key: string, method: Function, controller: any = 'default') {
     try {
-        console.log('注册快捷键:', shortcut_key, )
+        console.log('注册快捷键:', shortcut_key,)
         // 如果已注册，返回报错信息,已被占用
         if (await isRegistered(shortcut_key)) {
             console.log('快捷键已被占用:', shortcut_key)
-            return { message: '快捷键已被占用' , code: 1 }
+            return {message: '快捷键已被占用', code: 1}
         } else {
 
             // 重新注册快捷键，保持监听状态
@@ -40,11 +42,11 @@ export async function registerShortcuts(shortcut_key: string, method: Function, 
             });
 
             console.log('快捷键注册成功:', shortcut_key);
-            return { message: '快捷键注册成功', code: 0 }
+            return {message: '快捷键注册成功', code: 0}
         }
     } catch (error) {
         console.error('注册快捷键失败:', error);
-        return { message: '注册快捷键失败', code: 2 }
+        return {message: '注册快捷键失败', code: 2}
     }
 
 }
@@ -55,15 +57,15 @@ async function readShortcutConfig() {
 
 // 添加取消注册快捷键的函数
 async function unregisterShortcut(shortcut: string) {
-  try {
-    if (await isRegistered(shortcut)) {
-      await unregister(shortcut);
-      console.log('快捷键已注销:', shortcut);
+    try {
+        if (await isRegistered(shortcut)) {
+            await unregister(shortcut);
+            console.log('快捷键已注销:', shortcut);
+        }
+    } catch (error) {
+        console.error('注销快捷键失败:', shortcut, error);
+        throw error;
     }
-  } catch (error) {
-    console.error('注销快捷键失败:', shortcut, error);
-    throw error;
-  }
 }
 
 // 修改 registerShortcutsMain 函数，添加注销旧快捷键的逻辑
@@ -81,7 +83,8 @@ export async function registerShortcutsMain(controller: any = 'default') {
         const oldConfig = {
             default: config.shortcut_key.default,
             fixed_copy: config.shortcut_key.fixed_copy,
-            fixed_ocr: config.shortcut_key.fixed_ocr
+            fixed_ocr: config.shortcut_key.fixed_ocr,
+            paste_img: config.shortcut_key.paste_img,
         };
 
         // 注销所有旧的快捷键
@@ -112,6 +115,11 @@ export async function registerShortcutsMain(controller: any = 'default') {
             config.shortcut_key.fixed_ocr,
             captureScreenshot,
             'fixed_ocr'
+        );
+        await registerShortcuts(
+            config.shortcut_key.paste_img,
+            readClipboardImage,
+            'paste_img'
         );
 
         shortcutsRegistered = true;
@@ -161,7 +169,8 @@ export async function listenShortcuts() {
                 .filter(window => window.label.startsWith('fixed') || window.label === 'Toolbar')
                 .map(async window => {
                     try {
-                        const unlistenFn = await window.onCloseRequested(() => {});
+                        const unlistenFn = await window.onCloseRequested(() => {
+                        });
                         unlistenFn();
 
                         await window.close();
@@ -185,7 +194,7 @@ export async function listenShortcuts() {
 export async function listenFixedWindows() {
     try {
         await listen('windowPoolChanged', async (event: any) => {
-            const { label } = event.payload;
+            const {label} = event.payload;
             try {
                 const win = await windows.getWin(label)
                 if (win) {
@@ -193,17 +202,21 @@ export async function listenFixedWindows() {
                         try {
                             // 这里只更新了数据库状态，没有处理工具栏窗口
                             await updateAuth('windowPool', {state: 0, windowName: label}, {windowName: label})
-                            
+
                             // 需要添加：如果没有其他固定窗口，则关闭工具栏
                             const allWindows = await windows.getAllWin();
-                            const hasOtherFixedWindows = allWindows.some(w => 
+                            const hasOtherFixedWindows = allWindows.some(w =>
                                 w.label.startsWith('fixed_') && w.label !== label
                             );
-                            
+
                             if (!hasOtherFixedWindows) {
                                 const toolbarWin = await windows.getWin('Toolbar');
                                 if (toolbarWin) {
                                     await windows.closeWin('Toolbar');
+                                }
+                                const translateWin = await windows.getWin('translate_settings');
+                                if (translateWin) {
+                                    await windows.closeWin('translate_settings');
                                 }
                             }
                         } catch (error) {
@@ -221,5 +234,46 @@ export async function listenFixedWindows() {
         });
     } catch (error) {
         console.error('设置固定窗口事件监听器时出错:', error);
+    }
+}
+
+
+export async function readClipboardImage() {
+    try {
+        const clipboardImage = await readImage();
+        if (!clipboardImage) {
+            console.error('剪贴板中没有图片');
+            return;
+        }
+
+        // 获取原始 RGBA 数据
+        const rgba = await clipboardImage.rgba();
+        
+        // 获取图片尺寸
+        const size = await clipboardImage.size();
+        const width = size.width;
+        const height = size.height;
+
+        console.log('图片尺寸:', width, 'x', height);
+        console.log('RGBA 数据长度:', rgba.length);
+
+        const filePath = await invoke('write_image', { 
+            rgbaData: Array.from(rgba),
+            width: width,
+            height: height
+        });
+        // 获取鼠标坐标
+        const mousePosition = await invoke<string>('get_mouse_position');
+        console.log('鼠标坐标:', mousePosition)
+        const mousePositionJson = JSON.parse(mousePosition) as { x: number, y: number };
+        const mouseX = mousePositionJson.x;
+        const mouseY = mousePositionJson.y;
+        console.log('图片已保存到:', filePath, '鼠标坐标:', mouseX, mouseY);
+        await createScreenshotWindow(mouseX, mouseY, width, height, 'default', {path: filePath});
+
+        return filePath;
+    } catch (error) {
+        console.error('处理剪贴板图片失败:', error);
+        throw error;
     }
 }

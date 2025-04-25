@@ -28,6 +28,7 @@ pub async fn baidu_translate(
     let sign = format!("{:x}", md5::compute(sign));
 
     let client = reqwest::Client::new();
+    print!("Requesting: {} {} {} {} {}", text, from, to, app_id, sign);
     let res = client
         .post("https://fanyi-api.baidu.com/api/trans/vip/translate")
         .form(&[
@@ -41,8 +42,8 @@ pub async fn baidu_translate(
         .send()
         .await
         .map_err(|e| e.to_string())?;
-
     let body = res.text().await.map_err(|e| e.to_string())?;
+    print!("Response: {}", body);
     Ok(body)
 }
 

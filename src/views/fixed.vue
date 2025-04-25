@@ -47,7 +47,7 @@ const is_ocr: Ref<UnwrapRef<boolean>, UnwrapRef<boolean> | boolean> = ref(false)
 //   console.log('OCR识别', path)
 //   emit('ocrImage',readFileImage(image_path.value))
 // }
-let menuBounds = {x: 0, y: 0, width: 50, height: 220};
+let menuBounds = {x: 0, y: 0, width: 50, height: 360};
 
 const win = new Windows()
 
@@ -182,7 +182,7 @@ listen("ocrImage", async (event) => {
 const isTranslated = ref(false)
 
 // 监听翻译事件
-listen("translateText", async () => {
+listen("translateText", async (event: any) => {
   if (image_ocr.value && image_ocr.value.data) {
     try {
       // 在翻译前，确保保存完整的原始数据结构
@@ -198,11 +198,12 @@ listen("translateText", async () => {
         }
       }
 
+      const {from, to} = event.payload || {from: 'auto', to: 'auto'} ;
       // 获取所有需要翻译的文本
       const texts = image_ocr.value.data.map(item => item.text);
 
       // 批量翻译
-      const translatedTexts = await translateTexts(texts);
+      const translatedTexts = await translateTexts(texts, from, to);
 
       // 在更新显示数据前添加调试信息
       console.log('原始文本:', texts);
@@ -311,7 +312,7 @@ const showOcrPanel = ref(true);
 // 初始化 OCR 面板显示状态
 const initOcrPanelVisibility = async () => {
   try {
-    const result = await queryAuth('system_config', 
+    const result = await queryAuth('system_config',
       "SELECT config_value FROM system_config WHERE config_key = 'ocr_panel_visible'"
     ) as { config_value: string }[];
     showOcrPanel.value = result[0]?.config_value === 'true';
@@ -387,7 +388,7 @@ onMounted(async () => {
 
     // 创建工具栏窗口
     let toolbarWin: any = null;
-
+    const size: any = await getSize()
     const handleKeyDown = async (event: KeyboardEvent) => {
       if (event.code === 'Space') {
         event.preventDefault();
@@ -398,18 +399,28 @@ onMounted(async () => {
           toolbarWin = null;
         } else {
           // 如果工具栏不存在，则创建它
+          const currentWindow = await NewWindows.getWin(label);
+          let x = 100;
+          let y = 100;
+          
+          if (currentWindow) {
+            const position = await currentWindow.outerPosition();
+            x = position.x;
+            y = position.y + size.height; // 设置在窗口顶部上方
+          }
+          
           toolbarWin = await NewWindows.createWin({
             label: 'Toolbar',
             url: `/#/painting-toolbar?sourceLabel=${label}`,
-            width: 300,
+            width: 350,
             height: 40,
-            x: 100,
-            y: 100,
+            x: x,
+            y: y,
             decorations: false,
             transparent: true,
             alwaysOnTop: true,
             skipTaskbar: true,
-          }, {parent: label});
+          }, {});
         }
       }
     };
@@ -484,7 +495,8 @@ const drag = async (event: MouseEvent) => {
 
     const currentWindow = await NewWindows.getWin(label)
     const toolbarWindow = await NewWindows.getWin('Toolbar')
-
+    const translateSettingsWindow = await NewWindows.getWin('translate_settings')
+    const size: any = await getSize()
     if (currentWindow) {
       const newX = initialPosition.value.x + dx
       const newY = initialPosition.value.y + dy
@@ -492,12 +504,17 @@ const drag = async (event: MouseEvent) => {
       // 移动主窗口
       await currentWindow.setPosition(new PhysicalPosition(newX, newY))
 
-      // 移动工具栏窗口
+      // 移动工具栏窗口 - 修改为上方
       if (toolbarWindow) {
         await toolbarWindow.setPosition(new PhysicalPosition(
             newX,
-            newY + (await currentWindow.outerSize()).height + 1
+            newY + size.height
         ))
+      }
+      
+      // 移动翻译设置窗口
+      if (translateSettingsWindow) {
+        await translateSettingsWindow.setPosition(new PhysicalPosition(newX, newY - 40))
       }
     }
   }
@@ -525,10 +542,16 @@ listen('show-alert', (event: any) => {
 // 监听切换 OCR 面板显示状态事件
 listen('toggleOcrPanel', async () => {
   showOcrPanel.value = !showOcrPanel.value;
+  // 强制更新视图
+  await nextTick();
   // 根据面板显示状态调整窗口大小
   const size = await getSize()
   if (size !== null) {
     resize(size.width + (showOcrPanel.value ? 300 : -300), size.height)
+  }
+  // 触发视图更新
+  if (image_ocr.value) {
+    image_ocr.value = { ...image_ocr.value };
   }
 });
 
@@ -641,10 +664,10 @@ const getCharWidth = (char: string) => {
               textAlign: 'left',
             }"
             @wheel="handleWheel"
-            @dblclick="copyText(item.text)"
+            @dblclick="copyText(!showOcrPanel && isTranslated && item.translatedText ? item.translatedText : item.text)"
             @click="scrollToItem(index)"
         >
-          {{ item.text }}
+          {{ !showOcrPanel && isTranslated && item.translatedText ? item.translatedText : item.text }}
         </div>
       </div>
 

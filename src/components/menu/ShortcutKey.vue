@@ -45,6 +45,7 @@ interface Shortcuts {
   default: string;
   fixed_copy: string;
   fixed_ocr: string;
+  paste_img: string;
 }
 
 // 定义标签映射类型
@@ -52,6 +53,7 @@ interface ShortcutLabels {
   default: string;
   fixed_copy: string;
   fixed_ocr: string;
+  paste_img: string;
   [key: string]: string;
 }
 
@@ -59,14 +61,16 @@ interface ShortcutLabels {
 const shortcuts = ref<Shortcuts>({
   default: '',
   fixed_copy: '',
-  fixed_ocr: ''
+  fixed_ocr: '',
+  paste_img: ''
 });
 
 // 快捷键标签映射
 const shortcutLabels: ShortcutLabels = {
   default: '默认截图',
   fixed_copy: '固定复制',
-  fixed_ocr: '固定OCR'
+  fixed_ocr: '固定OCR',
+  paste_img: '贴图',
 };
 
 // 获取快捷键显示标签
@@ -82,7 +86,8 @@ const loadShortcuts = async () => {
     shortcuts.value = {
       default: shortcutConfig.default?.toUpperCase() || '',
       fixed_copy: shortcutConfig.fixed_copy?.toUpperCase() || '',
-      fixed_ocr: shortcutConfig.fixed_ocr?.toUpperCase() || ''
+      fixed_ocr: shortcutConfig.fixed_ocr?.toUpperCase() || '',
+      paste_img: shortcutConfig.paste_img?.toUpperCase() || '',
     };
   } catch (error) {
     console.error('Failed to load shortcuts:', error);
@@ -116,7 +121,8 @@ const saveShortcuts = async () => {
     const upperShortcuts = {
       default: shortcuts.value.default.toUpperCase(),
       fixed_copy: shortcuts.value.fixed_copy.toUpperCase(),
-      fixed_ocr: shortcuts.value.fixed_ocr.toUpperCase()
+      fixed_ocr: shortcuts.value.fixed_ocr.toUpperCase(),
+      paste_img: shortcuts.value.paste_img.toUpperCase(),
     };
 
     await invoke('save_shortcuts', { shortcuts: upperShortcuts });

@@ -5,6 +5,7 @@ import fixed from "@/views/fixed.vue"
 import PaintingToolbar from "@/views/PaintingToolbar.vue"
 import Contextmenu from "@/components/contextmenu.vue"
 import Notification from "@/components/Notification.vue"
+import TranslateSettings from '@/components/translate-settings.vue'
 
 const routes = [
     {
@@ -36,6 +37,11 @@ const routes = [
         path: '/notification',
         name: 'Notification',
         component: Notification
+    },
+    {
+        path: '/translate-settings',
+        name: 'translate-settings',
+        component: TranslateSettings
     }
 ]
 

@@ -1,21 +1,18 @@
+// use paddleocr::Ppocr;
+use crate::utils::img_util::image_to_base64;
 use crate::utils::sql::{get_shortcut_keys, init_db, query_tables};
+use crate::utils::tencent_ocr::{call_tencent_ocr, get_tencent_config};
 use crate::utils::{color, read_conf::read_conf, translate};
 use image::open;
 use mouse_position::mouse_position::Mouse;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::Path;
-use std::{env, os::windows::process::CommandExt, process::Command};
-// use paddleocr::Ppocr;
-use crate::utils::img_util::image_to_base64;
-use crate::utils::tencent_ocr::{call_tencent_ocr, get_tencent_config};
-use md5;
-use rand;
-use reqwest;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::{Emitter, Manager};
+use std::{env, os::windows::process::CommandExt, process::Command};
+use tauri::Emitter;
 use xcap::{image, Monitor};
-
+use image::{ImageBuffer, Rgba};
 static TRACKING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Serialize, Deserialize)]
@@ -40,22 +37,32 @@ pub fn get_color_at(x: i32, y: i32) -> Result<String, String> {
     color::get_pixel_color(x, y)
 }
 
+
 #[tauri::command(rename_all = "snake_case")]
 pub async fn ps_ocr(image_path: &str) -> Result<String, String> {
     println!("image_path: {},开始R_OCR识别", image_path);
 
-    // 根据平台选择正确的可执行文件路径
-    #[cfg(target_os = "windows")]
-    let exe_path = "tools\\RapidOCR-json_v0.2.0\\RapidOCR-json.exe";
-    #[cfg(target_os = "macos")]
-    let exe_path = "tools/RapidOCR-json_v0.2.0/RapidOCR-json";
-    #[cfg(target_os = "linux")]
-    let exe_path = "tools/RapidOCR-json_v0.2.0/RapidOCR-json";
+    // 获取当前执行文件的目录
+    let current_exe = env::current_exe()
+        .map_err(|e| format!("无法获取当前执行文件路径: {}", e))?;
+    let run_dir = current_exe
+        .parent()
+        .ok_or_else(|| "无法获取执行文件目录".to_string())?;
+    
+    println!("current_exe_dir: {:?}", run_dir);
 
-    // 使用平台无关的路径分隔符
-    let models_path = Path::new("tools")
-        .join("RapidOCR-json_v0.2.0")
-        .join("models");
+    // 构建工具路径
+    #[cfg(target_os = "windows")]
+    let exe_path = run_dir.join("tools\\RapidOCR-json_v0.2.0\\RapidOCR-json.exe");
+    #[cfg(target_os = "macos")]
+    let exe_path = run_dir.join("tools/RapidOCR-json_v0.2.0/RapidOCR-json");
+    #[cfg(target_os = "linux")]
+    let exe_path = run_dir.join("tools/RapidOCR-json_v0.2.0/RapidOCR-json");
+
+    // 构建模型目录路径
+    let models_path = run_dir.join("tools/RapidOCR-json_v0.2.0/models");
+
+    println!("exe_path: {:?}, models_path: {:?}", exe_path, models_path);
 
     #[cfg(target_os = "windows")]
     let mut command = Command::new(exe_path);
@@ -107,12 +114,27 @@ fn normalized(filename: &str) -> String {
 pub async fn ps_ocr_pd(image_path: &str) -> Result<String, String> {
     println!("image_path: {},开始PD_OCR识别", image_path);
 
+    // 获取当前执行文件的目录
+    let current_exe = env::current_exe()
+        .map_err(|e| format!("无法获取当前执行文件路径: {}", e))?;
+    let run_dir = current_exe
+        .parent()
+        .ok_or_else(|| "无法获取执行文件目录".to_string())?;
+    
+    println!("current_exe_dir: {:?}", run_dir);
+
+    // 构建工具路径
     #[cfg(target_os = "windows")]
-    let exe_path = "tools\\PaddleOCR-json_v1.4.1\\PaddleOCR-json.exe";
+    let exe_path = run_dir.join("tools\\PaddleOCR-json_v1.4.1\\PaddleOCR-json.exe");
     #[cfg(target_os = "macos")]
-    let exe_path = "tools/PaddleOCR-json_v1.4.1/PaddleOCR-json";
+    let exe_path = run_dir.join("tools/PaddleOCR-json_v1.4.1/PaddleOCR-json");
     #[cfg(target_os = "linux")]
-    let exe_path = "tools/PaddleOCR-json_v1.4.1/PaddleOCR-json";
+    let exe_path = run_dir.join("tools/PaddleOCR-json_v1.4.1/PaddleOCR-json");
+
+    println!("exe_path: {:?}", exe_path);
+
+    // 构建配置文件路径
+    let models_path = run_dir.join("tools/PaddleOCR-json_v1.4.1/models/config_chinese.txt");
 
     #[cfg(target_os = "windows")]
     let mut command = Command::new(exe_path);
@@ -120,11 +142,7 @@ pub async fn ps_ocr_pd(image_path: &str) -> Result<String, String> {
     command.creation_flags(0x08000000); // CREATE_NO_WINDOW flag
     #[cfg(not(target_os = "windows"))]
     let mut command = Command::new(exe_path);
-    // 使用平台无关的路径分隔符
-    let models_path = Path::new("tools")
-        .join("PaddleOCR-json_v1.4.1")
-        .join("models")
-        .join("config_chinese.txt");
+
     let output = command
         .arg("--config_path")
         .arg(models_path)
@@ -146,19 +164,36 @@ pub async fn ps_ocr_pd(image_path: &str) -> Result<String, String> {
     Ok(decoded_result.to_string())
 }
 
-#[tauri::command(rename_all = "snake_case")]
-pub fn capture_screen_one() -> Result<String, String> {
-    let my_struct = Struct::new();
-    // 直接获取鼠标位置和应屏幕，避免获取所有显示器
+// 获取鼠标所在位置
+#[tauri::command()]
+pub async  fn get_mouse_position() -> Result<String, String> {
     let position = Mouse::get_mouse_position();
     let (x, y) = if let Mouse::Position { x, y } = position {
         (x, y)
     } else {
         return Err("获取鼠标位置失败".to_string());
     };
+    
+    Ok(json!({
+        "x": x,
+        "y": y
+    })
+    .to_string())
+}
+
+
+#[tauri::command()]
+pub async fn capture_screen_one() -> Result<String, String> {
+    let my_struct = Struct::new();
+    // get_mouse_position 获取鼠标位置
+    let mouse_position = get_mouse_position().await?;
+    let mouse_position: serde_json::Value = serde_json::from_str(&mouse_position).unwrap();
+    let x = mouse_position["x"].as_i64().unwrap_or_default();
+    let y = mouse_position["y"].as_i64().unwrap_or_default();
+
 
     // 直接从坐标获取显示器
-    let screen = Monitor::from_point(x, y).map_err(|_| "无法获取显示器信息".to_string())?;
+    let screen = Monitor::from_point(x as i32, y as i32).map_err(|_| "无法获取显示器信息".to_string())?;
     println!("{:?}", screen);
     // 直接截图保存
     let image_data = screen.capture_image().map_err(|_| "截图失败".to_string())?;
@@ -180,7 +215,7 @@ pub fn capture_screen_one() -> Result<String, String> {
     .to_string())
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command()]
 pub fn capture_screen_fixed(x: i32, y: i32, width: u32, height: u32) -> Result<String, String> {
     let my_struct = Struct::new();
     // 直接获取鼠标位置和对应屏幕，避免获取所有显示器
@@ -214,32 +249,6 @@ pub fn capture_screen_fixed(x: i32, y: i32, width: u32, height: u32) -> Result<S
     })
     .to_string())
 }
-
-// #[tauri::command(rename_all = "snake_case")]
-// fn copied_to_clipboard(image_path: &str) -> Result<String, String> {
-//     let set_image = ClipBoardOprator::set_image;
-//     // 读取图片数据为base64
-//     let img = img_util::image_to_base64(image_path.as_ref()).map_err(|e| e.to_string())?;
-//     // // 转换为ImageData
-//     let img_db = img_util::base64_to_rgba8(&img)?;
-//     // // 构建ImageDataDB
-//     // let base64 = img_util::rgba8_to_base64(&img_db);
-//     // println!("图片base64已转换");
-//     // let content_db = ImageDataDB {
-//     //     width: img_db.width,
-//     //     height: img_db.height,
-//     //     base64: img,
-//     // };
-//     // 保存到剪贴板
-//     set_image(img_db).map_err(|e| e.to_string())?;
-//     // 清空缓存
-//     drop(img);
-//     Ok(json!({
-//         "success": true,
-//         "message": "图片已复制到剪贴板"
-//     })
-//         .to_string())
-// }
 
 // 删除临时文,以AGCut开头的文件
 #[tauri::command(rename_all = "snake_case")]
@@ -360,7 +369,6 @@ pub async fn restart_app(app_handle: tauri::AppHandle) -> Result<(), String> {
 
         app_handle.exit(0);
     }
-
     Ok(())
 }
 
@@ -421,13 +429,6 @@ pub fn get_all_monitors() -> Result<String, String> {
     Ok(serde_json::to_string(&monitors_info).unwrap())
 }
 
-// 添加新的结构体来表示鼠标位置
-#[derive(serde::Serialize)]
-struct MousePosition {
-    x: i32,
-    y: i32,
-    monitor_id: i32,
-}
 
 // 添加新的命令来获取当前鼠标位置和所在显示器
 #[tauri::command]
@@ -480,4 +481,45 @@ pub async fn track_mouse_position(app_handle: tauri::AppHandle) -> Result<(), St
 #[tauri::command]
 pub fn stop_mouse_tracking() {
     TRACKING.store(false, Ordering::SeqCst);
+}
+
+#[tauri::command]
+pub async fn write_image(rgba_data: Vec<u8>, width: u32, height: u32) -> Result<String, String> {
+    // 获取临时目录
+    let temp_dir = env::temp_dir();
+    // 生成唯一的文件名
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let file_name = format!("AGCut_{}.png", timestamp);
+    let file_path = temp_dir.join(file_name);
+
+    println!("准备写入图片:");
+    println!("- 目标路径: {:?}", file_path);
+    println!("- 图片尺寸: {}x{}", width, height);
+    println!("- RGBA数据长度: {}", rgba_data.len());
+
+    // 验证数据长度
+    let expected_len = width as usize * height as usize * 4;
+    if rgba_data.len() != expected_len {
+        return Err(format!(
+            "RGBA数据长度不匹配: 期望 {}, 实际 {}",
+            expected_len,
+            rgba_data.len()
+        ));
+    }
+
+    // 创建 ImageBuffer
+    let img = ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, rgba_data)
+        .ok_or_else(|| "无法创建图像缓冲区".to_string())?;
+
+    // 保存为 PNG
+    img.save(&file_path)
+        .map_err(|e| format!("保存图片失败: {}", e))?;
+
+    println!("图片已成功保存到: {:?}", file_path);
+
+    // 返回新文件的路径
+    Ok(file_path.to_string_lossy().to_string())
 }

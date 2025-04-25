@@ -1,10 +1,14 @@
 import {ref} from "vue";
-import {invoke} from "@tauri-apps/api/core";
+import {convertFileSrc, invoke} from "@tauri-apps/api/core";
 import {open} from '@tauri-apps/plugin-dialog';
 import {Image} from "@tauri-apps/api/image";
 import {writeImage} from "@tauri-apps/plugin-clipboard-manager";
+import {Windows} from "@/windows/create.ts";
+import {queryAuth, updateAuth} from '@/windows/dbsql'
+import {emit} from "@tauri-apps/api/event";
 const image_path = ref("");
 
+const win: any = new Windows()
 const greetMsg = ref("");
 // Open a dialog
 export async function openDialog() {
@@ -45,8 +49,85 @@ export const copyImage = async (path: string) => {
     }
 
 };
+
+
+// 初始化函数
+// 读取窗口池中的窗口信息
+// 将异步操作移到 ref 中
+const windowPool = ref<any>([]);
+
+// 删除窗口的函数,将state设置为0
+const removeWindowFromPool = (windowName: string) => {
+    updateAuth('windowPool', {state: 1, windowName: windowName}, {windowName: windowName})
+}
+
+
+console.log('窗口池', windowPool)
+
+const initWindowPool = async () => {
+    try {
+        windowPool.value = await queryAuth('windowPool', 'SELECT windowName FROM windowPool WHERE state = 0');
+        console.log('窗口池', windowPool.value);
+    } catch (error) {
+        console.error('查询窗口池失败:', error);
+        windowPool.value = [];
+    }
+};
+// 创建截图窗口
+ export const createScreenshotWindow = async (x: number, y: number, width: number, height: number,operationalID: string,result: any) => {
+
+    const imgUrl = convertFileSrc(result.path);
+    // 刷新窗口池
+
+    const win_fixed = new Windows();
+    // 注入全局状态
+    await initWindowPool();
+
+    const fixed_label = windowPool.value[0]?.windowName;  // 安全地获取第一个窗口名
+    if (fixed_label) {
+        removeWindowFromPool(fixed_label)
+        console.log('窗口池选择', fixed_label)
+
+        const url = `/#/fixed?path=${imgUrl}&operationalID=${operationalID}&label=${fixed_label}`;
+        console.log('窗口大小', width, height, '窗口位置', x, y, '图片路径', result.path)
+
+        const windowOptions = {
+            label: fixed_label,
+            title: fixed_label,
+            url: url,
+            width: width,
+            height: height,
+            x: x,
+            y: y ,
+            resizable: true,
+            fullscreen: false,
+            maximized: false,
+            transparent: true,
+            center: false,
+            decorations: false,
+            focus: true,
+
+        };
+
+        // 先创建窗口
+        await win_fixed.createWin(windowOptions, result.path);
+
+        // 等待窗口创建完成
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // 再发送事件
+        await emit('windowPoolChanged', {
+            label: fixed_label
+        });
+        // 关闭当前窗口
+        await win.closeWin('screenshot')
+    }
+}
+
+
 export default {
     openDialog,
     readFileImage,
+    createScreenshotWindow,
     copyImage
 };

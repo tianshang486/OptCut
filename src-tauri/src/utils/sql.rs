@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
 use std::env;
-use std::path::PathBuf;
 
 // 初始化数据库和配置表
 pub async fn init_db() -> Result<SqlitePool, String> {

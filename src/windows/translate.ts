@@ -34,11 +34,12 @@ export const testBaiduConfigApi = async (appId: string, secretKey: string): Prom
 };
 
 // 保存百度翻译配置
-export const saveBaiduConfigApi = async (appId: string, secretKey: string): Promise<void> => {
+export const saveBaiduConfigApi = async (appId: string, secretKey: string,translate_enabled: boolean): Promise<void> => {
   try {
     await Promise.all([
       updateAuth('system_config', { config_value: appId }, { config_key: 'baidu_app_id' }),
-      updateAuth('system_config', { config_value: secretKey }, { config_key: 'baidu_secret_key' })
+      updateAuth('system_config', { config_value: secretKey }, { config_key: 'baidu_secret_key' }),
+        updateAuth('system_config', { config_value: translate_enabled }, { config_key: 'translate_enabled' }),
     ]);
   } catch (error) {
     console.error('保存百度翻译配置失败:', error);
@@ -46,7 +47,7 @@ export const saveBaiduConfigApi = async (appId: string, secretKey: string): Prom
 };
 
 // 批量翻译调用
-export const translateTexts = async (texts: string[]): Promise<string[]> => {
+export const translateTexts = async (texts: string[], from: string = 'auto', to: string = 'zh'): Promise<string[]> => {
   try {
     // 检查输入文本是否有效
     if (!texts || !Array.isArray(texts) || texts.length === 0) {
@@ -63,8 +64,8 @@ export const translateTexts = async (texts: string[]): Promise<string[]> => {
 
     const result = await invoke('baidu_translate', {
       text: combinedText,
-      from: 'auto',
-      to: 'auto'
+      from,
+      to
     });
     
     console.log('百度翻译原始结果:', result);

@@ -8,7 +8,7 @@ pub fn create_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
     let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
     let show_i = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
     let hide_i = MenuItem::with_id(app, "hide", "最小化", true, None::<&str>)?;
-    let edit_i = MenuItem::with_id(app, "edit_file", "测试点击", true, None::<&str>)?;
+    // let edit_i = MenuItem::with_id(app, "edit_file", "测试点击", true, None::<&str>)?;
     let screenshots_i = MenuItem::with_id(app, "screenshots", "截图", true, None::<&str>)?;
     // 关闭所有截图窗口
     let close_all_i = MenuItem::with_id(
@@ -18,11 +18,11 @@ pub fn create_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
         true,
         None::<&str>,
     )?;
-    let a = Submenu::with_id_and_items(app, "File", "文章", true, &[&screenshots_i, &edit_i])?;
+    // let a = Submenu::with_id_and_items(app, "File", "文章", true, &[&screenshots_i, &edit_i])?;
     // 分割线
     let menu = Menu::with_items(
         app,
-        &[&show_i, &hide_i, &screenshots_i, &close_all_i, &a, &quit_i],
+        &[&show_i, &hide_i, &screenshots_i, &close_all_i, &quit_i],
     )?;
 
     let _ = TrayIconBuilder::with_id("tray")

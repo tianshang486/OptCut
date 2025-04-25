@@ -11,7 +11,7 @@
 
 /* 全局字体应用 */
 #app, body {
-    font-family: var(--custom-font) !important;
+    font-family: var(--custom-font), serif !important;
 }
 
 body {
