@@ -51,8 +51,8 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { queryAuth } from '@/windows/dbsql';
-import { testBaiduConfigApi, saveBaiduConfigApi } from '@/windows/translate';
+import { queryAuth } from '@/utils/dbsql';
+import { testBaiduConfigApi, saveBaiduConfigApi } from '@/utils/translate';
 
 // 百度翻译配置
 const baiduAppId = ref('');

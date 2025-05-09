@@ -6,6 +6,7 @@ import PaintingToolbar from "@/views/PaintingToolbar.vue"
 import Contextmenu from "@/components/contextmenu.vue"
 import Notification from "@/components/Notification.vue"
 import TranslateSettings from '@/components/translate-settings.vue'
+import TranslateInterfaces from '@/views/translate_interfaces.vue'
 
 const routes = [
     {
@@ -42,6 +43,11 @@ const routes = [
         path: '/translate-settings',
         name: 'translate-settings',
         component: TranslateSettings
+    },
+    {
+        path: '/translate-interfaces',
+        name: 'translate-interfaces',
+        component: TranslateInterfaces
     }
 ]
 

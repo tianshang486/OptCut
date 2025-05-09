@@ -26,22 +26,22 @@ pub async fn init_db() -> Result<SqlitePool, String> {
 }
 
 // 配置表结构
-#[derive(FromRow, Serialize, Deserialize)]
-pub struct Config {
-    pub id: i32,
-    pub key: String,
-    pub value: String,
-}
-// 读取配置项
-pub async fn get_config(pool: &SqlitePool, key: &str) -> Result<Option<String>, String> {
-    let config: Option<Config> = sqlx::query_as("SELECT * FROM config WHERE key = ?")
-        .bind(key)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(config.map(|c| c.value))
-}
+// #[derive(FromRow, Serialize, Deserialize)]
+// pub struct Config {
+//     pub id: i32,
+//     pub key: String,
+//     pub value: String,
+// }
+// // 读取配置项
+// pub async fn get_config(pool: &SqlitePool, key: &str) -> Result<Option<String>, String> {
+//     let config: Option<Config> = sqlx::query_as("SELECT * FROM config WHERE key = ?")
+//         .bind(key)
+//         .fetch_optional(pool)
+//         .await
+//         .map_err(|e| e.to_string())?;
+//
+//     Ok(config.map(|c| c.value))
+// }
 
 // 查询数据库中的表
 pub async fn query_tables(pool: &SqlitePool) -> Result<Vec<String>, String> {

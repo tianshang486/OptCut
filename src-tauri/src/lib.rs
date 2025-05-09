@@ -5,31 +5,26 @@ mod migrations;
 mod utils;
 
 use crate::commands::{
-    baidu_translate, baidu_translate_test, capture_screen_fixed, capture_screen_one,
-    delete_temp_file, get_all_monitors, get_color_at, ps_ocr, ps_ocr_pd, query_database_info,
-    read_config, restart_app, save_shortcuts, stop_mouse_tracking, tencent_ocr, tencent_ocr_test,
-    track_mouse_position,write_image,get_mouse_position
+    baidu_translate, baidu_translate_test, delete_temp_file, get_all_monitors, get_color_at,
+    get_mouse_position, get_selected_text,  query_database_info, read_config,
+    restart_app, save_shortcuts, stop_mouse_tracking, tencent_ocr, tencent_ocr_test,
+    track_mouse_position, write_image, jieba_cut, save_canvas_image, save_canvas_base64
 };
+use crate::utils::capture_screen::{capture_screen_fixed, capture_screen_one};
+use crate::utils::offline_ocr::{ps_ocr, ps_ocr_pd};
 use font::get_system_fonts;
 use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_sql::Builder;
 use utils::tray;
-// fn greet(image_path: &str) {
-//     // 根据传入的 img_path 创建完整的命令
-//     // 给image_path增加双引号
-//     // let image_path = format!("\"{}\"", imagePaths);
-//     println!("image_path: {}", image_path);
-//     main().expect("TODO: panic message")
-//     // 运行命令行命令
-//     // let output = ps_ocr(&image_path);
-//     // 返回格式化的结果
-//     // format!("你好!: {}", output)
-// }
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_autostart::Builder::new().args(["--flag1", "--flag2"]).build())
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .args(["--flag1", "--flag2"])
+                .build(),
+        )
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_fs::init())
@@ -62,6 +57,10 @@ pub fn run() {
             get_system_fonts,
             write_image,
             get_mouse_position,
+            get_selected_text,
+            jieba_cut,
+            save_canvas_image,
+            save_canvas_base64,
         ])
         // 阻止默认关闭事件,弹窗提示是否关闭窗口
         .on_window_event(|window, event| match event {

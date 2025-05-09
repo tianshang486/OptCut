@@ -72,6 +72,96 @@ export class PaintingTools {
     })
 
     this.initializeEvents()
+    
+    // 将实例存储在全局对象中，方便在其他地方访问
+    // @ts-ignore
+    window.activePaintingTools = this;
+  }
+
+  // 导出混合后的画布内容
+  public exportCanvas() {
+    try {
+      // 创建一个新的canvas元素
+      const exportCanvas = document.createElement('canvas');
+      const ctx = exportCanvas.getContext('2d');
+      
+      if (!ctx) {
+        console.error('无法获取导出画布的2D上下文');
+        return null;
+      }
+      
+      // 设置导出画布尺寸与当前画布相同
+      const canvasElement = this.canvas.getElement();
+      exportCanvas.width = canvasElement.width;
+      exportCanvas.height = canvasElement.height;
+      
+      // 创建临时图像
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      // 返回一个Promise以处理异步绘制
+      return new Promise((resolve) => {
+        // 先绘制原始画布内容
+        img.onload = () => {
+          // 绘制图像
+          ctx.drawImage(img, 0, 0);
+          
+          // 获取所有对象并按顺序绘制
+          this.canvas.forEachObject((obj) => {
+            if (!(obj instanceof fabric.Image)) { // 跳过背景图像
+              // 计算对象的边界框
+              const bound = obj.getBoundingRect();
+              
+              // 绘制对象
+              ctx.save();
+              ctx.translate(bound.left, bound.top);
+              if (obj.angle) {
+                ctx.rotate(obj.angle * Math.PI / 180);
+              }
+              
+              // 根据对象类型设置样式
+              if (obj instanceof fabric.Line) {
+                ctx.strokeStyle = String(obj.stroke || '#000');
+                ctx.lineWidth = obj.strokeWidth || 1;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(bound.width, bound.height);
+                ctx.stroke();
+              } else if (obj instanceof fabric.Rect) {
+                ctx.strokeStyle = String(obj.stroke || '#000');
+                ctx.lineWidth = obj.strokeWidth || 1;
+                ctx.strokeRect(0, 0, bound.width, bound.height);
+              } else if (obj instanceof fabric.IText) {
+                ctx.fillStyle = String(obj.fill || '#000');
+                ctx.font = `${obj.fontSize}px ${obj.fontFamily || 'Arial'}`;
+                ctx.fillText(obj.text || '', 0, 0);
+              }
+              
+              ctx.restore();
+            }
+          });
+          
+          // 导出最终画布为数据URL
+          resolve(exportCanvas.toDataURL('image/png'));
+        };
+        
+        // 设置图像源为当前画布的背景图像URL
+        img.src = this.canvas.toDataURL({
+          format: 'png',
+          quality: 1,
+          withoutTransform: true,
+          withoutShadow: true
+        });
+      });
+    } catch (e) {
+      console.error('导出画布失败:', e);
+      return null;
+    }
+  }
+
+  // 获取是否有绘图内容
+  public hasDrawings() {
+    return this.shapes.length > 0;
   }
 
   // 初始化鼠标事件
@@ -753,6 +843,10 @@ export class PaintingTools {
     // 移除键盘事件监听
     document.removeEventListener('keydown', this.boundHandleKeyDown)
     // 可以添加其他需要清理的内容
+    
+    // 清除全局引用
+    // @ts-ignore
+    window.activePaintingTools = null;
   }
 
   // 添加设置颜色的方法

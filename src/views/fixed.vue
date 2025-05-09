@@ -1,18 +1,17 @@
 <script setup lang="ts">
 import {Windows,} from '@/windows/create'
-// import {createText} from '@/windows/text_ocr_create.ts'
 import {onMounted, onUnmounted, Ref, ref, UnwrapRef, nextTick} from "vue";
-import {invoke} from "@tauri-apps/api/core";
+
 import {emit, listen} from "@tauri-apps/api/event";
-import {copyImage, readFileImage} from "@/windows/method.ts";
+import {copyImage, readFileImage} from "@/utils/method.ts";
 import {fabric} from 'fabric'
 import {writeText} from '@tauri-apps/plugin-clipboard-manager';
-import {PaintingTools} from '@/windows/painting'
+import {PaintingTools} from '@/utils/painting'
 import {PhysicalPosition} from '@tauri-apps/api/window'
-import {queryAuth} from "@/windows/dbsql.ts";
-import {tencentOCR} from '@/windows/ocr';
-import {translateTexts} from '@/windows/translate'
+import {queryAuth} from "@/utils/dbsql.ts";
+import {translateTexts} from '@/utils/translate'
 import {showToast} from '@/utils/toast'
+import {ocr} from "@/utils/ocr.ts";
 
 interface OcrItem {
   text: string;
@@ -34,19 +33,7 @@ const image_ocr = ref<{ code: any; data: OcrItem[] }>({
   data: []
 });
 const is_ocr: Ref<UnwrapRef<boolean>, UnwrapRef<boolean> | boolean> = ref(false)
-// 用于跟踪菜单状态
-// 如果operationalID是fixed_copy则是直接复制图片到剪贴板,然后关闭窗口
-// if (operationalID === 'fixed_copy') {
-//   console.log('复制图片', path)
-//   copyImage(path)
-//   console.log('关闭窗口', label)
-//   NewWindows.closeWin(label)
-// }
-// if (operationalID === 'fixed_ocr') {
-// //   进行OCR识别
-//   console.log('OCR识别', path)
-//   emit('ocrImage',readFileImage(image_path.value))
-// }
+
 let menuBounds = {x: 0, y: 0, width: 50, height: 360};
 
 const win = new Windows()
@@ -65,118 +52,40 @@ function getSize() {
 // 存储原始 OCR 结果
 const originalOcrData = ref<{ code: any; data: any[] } | null>(null)
 
-const ocr = async () => {
-  if (image_path.value === '' || image_path.value === null) {
-    alert('请先截图');
-    return;
-  }
 
-  try {
-    // 获取 OCR 模式
-    const modeResult = await queryAuth(
-        'system_config',
-        "SELECT config_value FROM system_config WHERE config_key = 'ocr_mode'"
-    ) as { config_value: string }[];
-
-    const mode = modeResult[0]?.config_value || 'offline';
-
-    let result: any;
-
-    if (mode === 'online') {
-      // 使用腾讯云 OCR
-      result = await tencentOCR(image_path.value);
-    } else {
-      // 使用离线 OCR
-      const engineResult = await queryAuth(
-          'system_config',
-          "SELECT config_value FROM system_config WHERE config_key = 'ocr_engine'"
-      ) as { config_value: string }[];
-
-      const engine = engineResult[0]?.config_value || 'RapidOCR';
-      result = await invoke(
-          engine === 'RapidOCR' ? 'ps_ocr' : 'ps_ocr_pd',
-          {image_path: image_path.value}
-      );
-    }
-
-    console.log('OCR 结果:', result);
-
-    let parsedResult = typeof result === 'string' ? JSON.parse(result) : result;
-
-    // 因为结果是数组，取第一个元素
-    const ocrData = Array.isArray(parsedResult) ? parsedResult[0] : parsedResult;
-
-    if (ocrData && ocrData.code === 100 && Array.isArray(ocrData.data)) {
-      // 适配腾讯云 OCR 的 box 格式
-      ocrData.data = ocrData.data.map((item: any) => {
-        const [x, y] = item.box[0]; // 取第一个点作为左上角坐标
-        const boxWidth = calculateBoxWidth(item.text, calculateFontSize(item)); // 动态计算框宽度
-
-        const boxHeight = Math.abs(item.box[1][1] - item.box[2][1]); // 根据实际坐标计算高度
-        // 取绝对值，防止负值
-        console.log('boxHeight:', boxHeight)
-        return {
-          ...item,
-          box: [
-            [x, y], // 左上角
-            [x + boxWidth, y], // 右上角
-            [x + boxWidth, y + boxHeight], // 右下角
-            [x, y + boxHeight] // 左下角
-          ]
-        };
-      });
-
-      console.log('OCR completed, data:', ocrData)
-      image_ocr.value = ocrData
-      is_ocr.value = true
-      originalOcrData.value = null
-      isTranslated.value = false
-      await emit('translationStatus', false)
-
-      // OCR 成功后发送事件切换到取消绘图状态并禁用工具栏
-      await emit('toolbar-tool-change', {
-        tool: null,  // null 表示取消绘图状态
-        targetLabel: label,
-        disableTools: true  // 添加标志表示禁用工具
-      })
-
-      // 根据面板显示状态调整窗口大小
-      const size = await getSize()
-      if (size !== null && showOcrPanel.value) {
-        resize(size.width + 300, size.height)
-      }
-    } else {
-      console.error('数据格式不正确:', ocrData);
-    }
-  } catch (error) {
-    console.error('OCR 处理错误:', error);
-    alert('OCR 处理失败: ' + error);
-  }
-};
-
-// 取消 OCR 时重新启用工具栏
+// 监听 ocrImage 事件
 listen("ocrImage", async (event) => {
   if (event.payload === null) {
-    is_ocr.value = false
+    is_ocr.value = false;
     image_ocr.value = {
       code: null,
       data: []
-    }
-    // 恢复原始窗口大小
-    const size = await getSize()
-    if (size !== null) {
-      resize(size.width - 300, size.height)
+    };
+    // 只有在面板显示时才调整窗口大小
+    const size = await getSize();
+    if (size !== null && showOcrPanel.value) {
+      resize(size.width - 300, size.height);
     }
     // 重新启用工具栏
     await emit('toolbar-tool-change', {
       tool: null,  // 保持取消绘图状态
       targetLabel: label,
       disableTools: false  // 重新启用工具
-    })
+    });
   } else {
-    await ocr()
+    await ocr({
+      image_path,
+      is_ocr,
+      image_ocr,
+      isTranslated,
+      originalOcrData,
+      showOcrPanel,
+      label,
+      resize,
+      getSize
+    });
   }
-})
+});
 
 // 添加翻译状态变量
 const isTranslated = ref(false)
@@ -198,7 +107,7 @@ listen("translateText", async (event: any) => {
         }
       }
 
-      const {from, to} = event.payload || {from: 'auto', to: 'auto'} ;
+      const {from, to} = event.payload || {from: 'auto', to: 'auto'};
       // 获取所有需要翻译的文本
       const texts = image_ocr.value.data.map(item => item.text);
 
@@ -226,7 +135,7 @@ listen("translateText", async (event: any) => {
     } catch (error) {
       const err = error as Error; // 将 error 断言为 Error 类型
       console.error('翻译处理失败:', err);
-      alert('翻译处理失败: ' + err.message);
+      alert('翻译处理失败: ' + err);
     }
   }
 });
@@ -241,6 +150,7 @@ listen("cancelTranslate", async () => {
   }
 });
 
+// 图片区域的右键菜单
 async function CreateContextMenu(event: any) {
   event.preventDefault();
   // 检查是否有选中的文本
@@ -271,7 +181,6 @@ async function CreateContextMenu(event: any) {
 
   // 添加翻译状态到 URL 参数
   const urlWithParams = `/#/contextmenu?path=${image_path.value}&label=${label}&is_ocr=${is_ocr.value}&is_translated=${isTranslated.value}&show_ocr_panel=${showOcrPanel.value}`;
-  console.log(urlWithParams)
 
   const options = {
     label: 'contextmenu',
@@ -313,7 +222,7 @@ const showOcrPanel = ref(true);
 const initOcrPanelVisibility = async () => {
   try {
     const result = await queryAuth('system_config',
-      "SELECT config_value FROM system_config WHERE config_key = 'ocr_panel_visible'"
+        "SELECT config_value FROM system_config WHERE config_key = 'ocr_panel_visible'"
     ) as { config_value: string }[];
     showOcrPanel.value = result[0]?.config_value === 'true';
   } catch (error) {
@@ -325,15 +234,16 @@ const initOcrPanelVisibility = async () => {
 onMounted(async () => {
   // 初始化 OCR 面板显示状态
   await initOcrPanelVisibility();
-  
+
   // 处理 fixed_copy 和 fixed_ocr
   if (operationalID === 'fixed_copy') {
     console.log('复制图片', path)
     await copyImage(path)
+
     console.log('关闭窗口', label)
     await NewWindows.closeWin(label)
   }
-  
+
   if (operationalID === 'fixed_ocr') {
     // 给一点延时确保组件完全加载
     setTimeout(async () => {
@@ -342,6 +252,14 @@ onMounted(async () => {
       await emit('ocrImage', img)
     }, 500)
   }
+  
+  // 监听菜单复制命令
+  listen('menu_copy_image', async (event: any) => {
+    console.log('接收到菜单复制命令:', event);
+    if (event.payload && event.payload.path) {
+      await copyImage(event.payload.path);
+    }
+  });
 
   // 监听右键菜单事件
   document.addEventListener('contextmenu', CreateContextMenu);
@@ -358,6 +276,7 @@ onMounted(async () => {
 
   // 获取页面大小
   const img = new Image();
+  img.crossOrigin = "anonymous"; // 添加跨域支持
   img.src = path;
 
   // 等图片加载完成
@@ -371,7 +290,7 @@ onMounted(async () => {
     // 创建绘图工具实例并传入 store
     paintingTools = new PaintingTools(canvas)
 
-    // 修改这里：使用 fabric.Image.fromURL 替代 FabricImage.fromURL
+    // 修改这里：使用 fabric.Image.fromURL 替代 FabricImage.fromURL，添加crossOrigin
     fabric.Image.fromURL(path, (fabricImg) => {
       fabricImg.set({
         left: 0,
@@ -384,7 +303,7 @@ onMounted(async () => {
       });
       canvas.add(fabricImg);
       canvas.renderAll();
-    });
+    }, { crossOrigin: 'anonymous' }); // 设置crossOrigin属性
 
     // 创建工具栏窗口
     let toolbarWin: any = null;
@@ -402,13 +321,13 @@ onMounted(async () => {
           const currentWindow = await NewWindows.getWin(label);
           let x = 100;
           let y = 100;
-          
+
           if (currentWindow) {
             const position = await currentWindow.outerPosition();
             x = position.x;
             y = position.y + size.height; // 设置在窗口顶部上方
           }
-          
+
           toolbarWin = await NewWindows.createWin({
             label: 'Toolbar',
             url: `/#/painting-toolbar?sourceLabel=${label}`,
@@ -452,16 +371,43 @@ onUnmounted(() => {
 // 在 script setup 顶部添加 paintingTools 引用
 let paintingTools: PaintingTools | null = null
 
-// 添加双击复制功能
+// 添加文本复制功能
 const copyText = async (text: string) => {
   try {
-    await writeText(text)
-    showToast('复制成功', 'success')
+    await writeText(text);
+    await showToast('复制成功', 'success');
   } catch (error) {
-    console.error('Failed to copy text:', error)
-    showToast('复制失败', 'error')
+    console.error('Failed to copy text:', error);
+    await showToast('复制失败', 'error');
   }
-}
+};
+
+// 修改复制全部文本的函数
+const copyAllText = async () => {
+  if (is_ocr.value && image_ocr.value && image_ocr.value.data) {
+    try {
+      const texts = image_ocr.value.data.map(item =>
+          isTranslated.value && item.translatedText ? item.translatedText : item.text
+      ).join('\n');
+
+      await writeText(texts);
+      await showToast('复制文本成功', 'success');
+    } catch (error) {
+      console.error('Failed to copy text:', error);
+      await showToast('复制失败', 'error');
+    }
+  } else {
+    // 如果没有OCR,则复制图片
+    try {
+      console.log('复制图片, paintingTools状态:', paintingTools?.hasDrawings());
+      await copyImage(path);
+      await showToast('复制图片成功', 'success');
+    } catch (error) {
+      console.error('Failed to copy image:', error);
+      await showToast('复制失败', 'error');
+    }
+  }
+};
 
 const isDragging = ref(false)
 const dragStart = ref({x: 0, y: 0})
@@ -511,7 +457,7 @@ const drag = async (event: MouseEvent) => {
             newY + size.height
         ))
       }
-      
+
       // 移动翻译设置窗口
       if (translateSettingsWindow) {
         await translateSettingsWindow.setPosition(new PhysicalPosition(newX, newY - 40))
@@ -551,7 +497,7 @@ listen('toggleOcrPanel', async () => {
   }
   // 触发视图更新
   if (image_ocr.value) {
-    image_ocr.value = { ...image_ocr.value };
+    image_ocr.value = {...image_ocr.value};
   }
 });
 
@@ -581,16 +527,6 @@ const handleWheel = (event: WheelEvent) => {
   }
 };
 
-// 优化计算框宽度的逻辑
-const calculateBoxWidth = (text: string, fontSize: number) => {
-  let totalWidth = 0;
-  for (const char of text) {
-    totalWidth += getCharWidth(char) * fontSize;
-  }
-  const charSpacing = 0.5; // 减少字符间距
-  totalWidth += (text.length - 1) * charSpacing; // 计算总字符间距
-  return totalWidth; // 直接返回计算的总宽度，不再限制最大宽度
-};
 
 // 添加新的 ref 来跟踪当前显示的项目索引
 const activeIndex = ref<number | null>(null);
@@ -615,20 +551,6 @@ const scrollToItem = (index: number) => {
   }
 };
 
-// 调整字符宽度系数
-const getCharWidth = (char: string) => {
-  // 汉字宽度
-  if (/[\u4e00-\u9fa5]/.test(char)) {
-    return 0.8; // 汉字宽度系数调整为 1.0
-  }
-  // 数字和字母宽度
-  if (/[0-9a-zA-Z]/.test(char)) {
-    return 0.6; // 数字和字母宽度系数调整为 0.6
-  }
-  // 其他字符
-  return 0.6; // 默认宽度系数调整为 0.8
-};
-
 </script>
 
 
@@ -639,6 +561,8 @@ const getCharWidth = (char: string) => {
       @mouseup="stopDrag"
       @mousemove="drag"
       @mouseleave="stopDrag"
+      @keydown.ctrl.c.prevent="copyAllText"
+      tabindex="0"
   >
     <!-- Canvas 始终显示 -->
     <canvas id="c"></canvas>
@@ -680,9 +604,10 @@ const getCharWidth = (char: string) => {
             class="flex items-start m-2 p-1 hover:bg-white/10 select-none ocr-list-item"
             :class="{ 'highlight': activeIndex === index }"
             @click="scrollToItem(index)"
+            @dblclick="copyText(isTranslated && item.translatedText ? item.translatedText : item.text)"
         >
           <span class="min-w-[24px] mr-2 text-gray-500 text-right select-none">{{ index + 1 }}</span>
-          <div class="flex-1 break-all cursor-copy select-none" @dblclick="copyText(item.text)">
+          <div class="flex-1 break-all cursor-copy select-none">
             <div v-if="isTranslated && item.translatedText">
               {{ item.translatedText }}
             </div>

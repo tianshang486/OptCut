@@ -114,8 +114,8 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { queryAuth, updateAuth } from '@/windows/dbsql';
-import { testTencentOCR } from '@/windows/ocr';
+import { queryAuth, updateAuth } from '@/utils/dbsql';
+import { testTencentOCR } from '@/utils/ocr';
 
 // OCR 模式
 const ocrMode = ref('offline');

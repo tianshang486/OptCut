@@ -1,11 +1,12 @@
-import {ref} from "vue";
-import {convertFileSrc, invoke} from "@tauri-apps/api/core";
-import {open} from '@tauri-apps/plugin-dialog';
-import {Image} from "@tauri-apps/api/image";
-import {writeImage} from "@tauri-apps/plugin-clipboard-manager";
-import {Windows} from "@/windows/create.ts";
-import {queryAuth, updateAuth} from '@/windows/dbsql'
-import {emit} from "@tauri-apps/api/event";
+import { ref } from "vue";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { open } from '@tauri-apps/plugin-dialog';
+import { Image } from "@tauri-apps/api/image";
+import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
+import { Windows } from "@/windows/create.ts";
+import { queryAuth, updateAuth } from '@/utils/dbsql'
+import { emit } from "@tauri-apps/api/event";
+
 const image_path = ref("");
 
 const win: any = new Windows()
@@ -19,7 +20,7 @@ export async function openDialog() {
     console.log(file);
     if (!file) return;
     image_path.value = file.join(", ");
-    greetMsg.value = await invoke("greet", {image_path: image_path.value});
+    greetMsg.value = await invoke("greet", { image_path: image_path.value });
     await invoke("capture_screen",);
 }
 
@@ -28,10 +29,45 @@ export async function readFileImage(path: string) {
 }
 
 // 复制图片到剪贴板
-export const copyImage = async (path: string) => {
+export const copyImage = async (path: string): Promise<any> => {
     // await invoke("copied_to_clipboard", {image_path: path});
     try {
-        const img: any = await readFileImage(path.replace('http://asset.localhost/', ''));
+        // 清理路径
+        const cleanPath = path.replace('http://asset.localhost/', '');
+        
+        // 先检查全局是否有paintingTools实例
+        // @ts-ignore
+        const activePaintingTools = window.activePaintingTools;
+        
+        if (activePaintingTools && activePaintingTools.hasDrawings()) {
+            try {
+                console.log('检测到有绘画内容，尝试保存绘画后的图片');
+                
+                // 使用导出方法获取合成后的图像
+                const dataUrl = await activePaintingTools.exportCanvas();
+                
+                if (dataUrl) {
+                    console.log('成功获取到绘画画布的数据');
+                    
+                    // 将Data URL转换为二进制数据
+                    const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+                    
+                    // 调用Rust函数保存画布数据到原始文件
+                    await invoke('save_canvas_base64', {
+                        base64Data: base64Data,
+                        originalPath: cleanPath
+                    });
+                    
+                    console.log('已保存绘画内容到原始图片文件');
+                }
+            } catch (e) {
+                console.error('导出绘画内容失败:', e);
+            }
+        }
+        
+        // 读取图片（可能已被更新）
+        const img: any = await readFileImage(cleanPath);
+        
         // 如果失败则重试,如果提示线程没有打开的粘贴板，则需要打开粘贴板
         try {
             await writeImage(img);
@@ -44,10 +80,9 @@ export const copyImage = async (path: string) => {
             }, 3000);
         }
     } catch (e) {
-        console.error('图片读取失败');
+        console.error('图片读取失败:', e);
         return;
     }
-
 };
 
 
@@ -58,7 +93,7 @@ const windowPool = ref<any>([]);
 
 // 删除窗口的函数,将state设置为0
 const removeWindowFromPool = (windowName: string) => {
-    updateAuth('windowPool', {state: 1, windowName: windowName}, {windowName: windowName})
+    updateAuth('windowPool', { state: 1, windowName: windowName }, { windowName: windowName })
 }
 
 
@@ -74,7 +109,7 @@ const initWindowPool = async () => {
     }
 };
 // 创建截图窗口
- export const createScreenshotWindow = async (x: number, y: number, width: number, height: number,operationalID: string,result: any) => {
+export const createScreenshotWindow = async (x: number, y: number, width: number, height: number, operationalID: string, result: any) => {
 
     const imgUrl = convertFileSrc(result.path);
     // 刷新窗口池
@@ -98,7 +133,7 @@ const initWindowPool = async () => {
             width: width,
             height: height,
             x: x,
-            y: y ,
+            y: y,
             resizable: true,
             fullscreen: false,
             maximized: false,

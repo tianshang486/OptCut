@@ -6,7 +6,7 @@ import pinia from './stores'  //引入
 import './app.css';
 import i18n from './i18n';
 import { enable, isEnabled } from '@tauri-apps/plugin-autostart';
-import { queryAuth } from '@/windows/dbsql';
+import { queryAuth } from '@/utils/dbsql';
 
 // 初始化字体
 async function initFont() {

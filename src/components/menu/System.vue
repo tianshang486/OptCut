@@ -111,7 +111,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { queryAuth, updateAuth,  } from '@/windows/dbsql';
+import { queryAuth, updateAuth,  } from '@/utils/dbsql';
 import { invoke } from "@tauri-apps/api/core";
 import { enable, isEnabled, disable } from '@tauri-apps/plugin-autostart';
 import { getVersion } from '@tauri-apps/api/app';

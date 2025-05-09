@@ -18,7 +18,8 @@ pub fn get_migrations() -> Vec<Migration> {
                 ('ctrl+alt+q', 'default'),
                 ('ctrl+alt+w', 'fixed_copy'),
                 ('ctrl+alt+e', 'fixed_ocr'),
-                ('alt+p', 'paste_img');
+                ('alt+p', 'paste_img'),
+                ('alt+e', 'select_text');
 
             -- 创建窗口池表
             CREATE TABLE IF NOT EXISTS windowPool (

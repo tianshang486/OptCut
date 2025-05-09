@@ -1,6 +1,6 @@
 import { TrayIcon, TrayIconEvent } from '@tauri-apps/api/tray';
 import { Menu } from '@tauri-apps/api/menu';
-import { captureScreenshot } from '@/windows/screenshot';
+import { captureScreenshot } from '@/utils/screenshot';
 import { Windows } from '@/windows/create';
 
 const TRAY_ID = 'OptCutTray';

@@ -46,6 +46,7 @@ interface Shortcuts {
   fixed_copy: string;
   fixed_ocr: string;
   paste_img: string;
+  select_text: string;
 }
 
 // 定义标签映射类型
@@ -54,6 +55,7 @@ interface ShortcutLabels {
   fixed_copy: string;
   fixed_ocr: string;
   paste_img: string;
+  select_text: string;
   [key: string]: string;
 }
 
@@ -62,7 +64,8 @@ const shortcuts = ref<Shortcuts>({
   default: '',
   fixed_copy: '',
   fixed_ocr: '',
-  paste_img: ''
+  paste_img: '',
+  select_text: ''
 });
 
 // 快捷键标签映射
@@ -71,6 +74,7 @@ const shortcutLabels: ShortcutLabels = {
   fixed_copy: '固定复制',
   fixed_ocr: '固定OCR',
   paste_img: '贴图',
+  select_text: '选中文字',
 };
 
 // 获取快捷键显示标签
@@ -88,6 +92,7 @@ const loadShortcuts = async () => {
       fixed_copy: shortcutConfig.fixed_copy?.toUpperCase() || '',
       fixed_ocr: shortcutConfig.fixed_ocr?.toUpperCase() || '',
       paste_img: shortcutConfig.paste_img?.toUpperCase() || '',
+      select_text: shortcutConfig.select_text?.toUpperCase() || '',
     };
   } catch (error) {
     console.error('Failed to load shortcuts:', error);
@@ -123,6 +128,7 @@ const saveShortcuts = async () => {
       fixed_copy: shortcuts.value.fixed_copy.toUpperCase(),
       fixed_ocr: shortcuts.value.fixed_ocr.toUpperCase(),
       paste_img: shortcuts.value.paste_img.toUpperCase(),
+      select_text: shortcuts.value.select_text.toUpperCase(),
     };
 
     await invoke('save_shortcuts', { shortcuts: upperShortcuts });

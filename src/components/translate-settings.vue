@@ -30,7 +30,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
-import { updateAuth, queryAuth } from '@/windows/dbsql';
+import { updateAuth, queryAuth } from '@/utils/dbsql';
 import { emit } from '@tauri-apps/api/event';
 import { Windows } from '@/windows/create';
 
@@ -45,7 +45,7 @@ async function loadConfig() {
       queryAuth('system_config', "SELECT config_value FROM system_config WHERE config_key = 'translate_from'"),
       queryAuth('system_config', "SELECT config_value FROM system_config WHERE config_key = 'translate_to'")
     ]);
-
+    console.log('加载翻译配置成功:', fromResult, toResult)
     if (fromResult[0]?.config_value) {
       fromLang.value = fromResult[0].config_value;
     }

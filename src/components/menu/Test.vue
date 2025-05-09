@@ -21,6 +21,9 @@
       <button class="btn btn-info" @click="logWindowPool">
         <span class="button-title">窗口池</span>
       </button>
+      <button class="btn btn-info" @click="get_selected_text">
+        <span class="button-title">选中识别</span>
+      </button>
     </div>
   </div>
 </template>
@@ -28,9 +31,9 @@
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 import { open } from '@tauri-apps/plugin-dialog';
-import { captureScreenshot } from '@/windows/screenshot.ts'
+import { captureScreenshot } from '@/utils/screenshot.ts'
 import { ref } from "vue";
-import { queryAuth } from "@/windows/dbsql"
+import { queryAuth } from "@/utils/dbsql"
 
 const image_path = ref("");
 const greetMsg = ref("");
@@ -75,5 +78,13 @@ async function query_database_info() {
 const logWindowPool = () => {
   const windowPool = queryAuth('windowPool');
   console.log(windowPool);
+}
+
+// 测试选中文本
+async function get_selected_text() {
+  // 延迟5s执行
+  await new Promise(resolve => setTimeout(resolve, 5000));
+  const select_text = await invoke("get_selected_text",);
+  alert(select_text)
 }
 </script> 

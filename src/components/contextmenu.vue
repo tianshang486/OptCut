@@ -29,12 +29,11 @@
 
 <script setup lang="ts">
 import {onMounted, ref} from 'vue'
-import {writeImage} from "@tauri-apps/plugin-clipboard-manager";
 import {Image} from "@tauri-apps/api/image";
 import {Windows,} from '@/windows/create'
 import {emit, listen} from "@tauri-apps/api/event";
-import { updateAuth, queryAuth } from '@/windows/dbsql';
-
+import { updateAuth } from '@/utils/dbsql';
+import { translateTheText } from '@/utils/translate';
 
 // 定义菜单项类型
 interface MenuItem {
@@ -61,17 +60,27 @@ const is_ocr: any = ref(params.get('is_ocr') === 'true') // 获取 OCR 状态
 const is_translated: any = ref(params.get('is_translated') === 'true') // 从 URL 获取翻译状态
 const show_ocr_panel: any = ref(params.get('show_ocr_panel') === 'true') // 获取 OCR 面板显示状态
 console.log(image_path.value, label.value,'父信息')// const image_ocr: any = ref([])
-// const activeIndex = ref('1')
 
 const menuItems: MenuItem[] = [
   { 
     label: '复制', 
-    handler: () => copyImage(image_path.value).then(() => NewWindows.closeWin('contextmenu')),
+    handler: async () => {
+      // 使用emit向主窗口发送复制命令
+      await emit('menu_copy_image', { path: image_path.value });
+      await NewWindows.closeWin('contextmenu');
+    },
     disabled: false
   },
   { 
     label: '复制关闭', 
-    handler: () => copyAndClose(image_path.value),
+    handler: async () => {
+      // 使用emit向主窗口发送复制命令
+      await emit('menu_copy_image', { path: image_path.value });
+      // 等待第二个窗口关闭
+      NewWindows.closeWin('contextmenu');
+      // 等待第一个窗口关闭
+      NewWindows.closeWin(label.value);
+    },
     disabled: false
   },
   { 
@@ -110,17 +119,7 @@ const menuItems: MenuItem[] = [
   { 
     label: '翻译', 
     handler: async () => {
-      // 获取当前的语言设置
-      const [fromResult, toResult] = await Promise.all([
-        queryAuth('system_config', "SELECT config_value FROM system_config WHERE config_key = 'translate_from'"),
-        queryAuth('system_config', "SELECT config_value FROM system_config WHERE config_key = 'translate_to'")
-      ]);
-      console.log('翻译', fromResult)
-      const from = fromResult[0]?.config_value || '错误';
-      const to = toResult[0]?.config_value || '错误';
-      console.log('翻译', from + '->' + to)
-      // 发送翻译事件，包含语言设置
-      await emit('translateText', { from, to });
+      await translateTheText()
       is_translated.value = true;
       await NewWindows.closeWin('contextmenu');
     },
@@ -176,6 +175,7 @@ const menuItems: MenuItem[] = [
     label: '关闭窗口', 
     handler: async () => {
       await NewWindows.closeWin(label.value)
+      await NewWindows.closeWin('translate_settings')
       await NewWindows.closeWin('contextmenu')
     },
     disabled: false
@@ -235,40 +235,6 @@ onMounted(() => {
   }, 100)
 });
 
-
-// 复制图片到剪贴板
-const copyImage = async (path: string) => {
-  // await invoke("copied_to_clipboard", {image_path: path});
-  const img: any = await readFileImage(path);
-  // 如果失败则重试,如果提示线程没有打开的粘贴板，则需要打开粘贴板
-  try {
-    await writeImage(img);
-    // alert('复制成功');
-  } catch (e) {
-    console.error(e);
-    //   延迟2秒重试
-    setTimeout(() => {
-      copyImage(path);
-    }, 3000);
-  }
-};
-
-// 复制并关闭窗口
-const copyAndClose = async (path: string) => {
-  try {
-    // 调用同步的 copyImage 函数
-    copyImage(path);
-
-    // 等待第一个窗口关闭
-    await NewWindows.closeWin(label.value);
-
-    // 等待第二个窗口关闭
-    await NewWindows.closeWin('contextmenu');
-  } catch (error) {
-    console.error("Error occurred during copy and close operations:", error);
-    // 可以在这里处理错误，例如重新尝试或记录日志
-  }
-};
 const handleSelect = (index: string) => {
   const item = menuItems.find(item => item.label === index)
   if (item?.handler) {

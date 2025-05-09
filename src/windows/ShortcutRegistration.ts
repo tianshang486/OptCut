@@ -1,12 +1,13 @@
-import {captureScreenshot, listenMonitorSwitch} from '@/windows/screenshot.ts'
+import {captureScreenshot, listenMonitorSwitch} from '@/utils/screenshot.ts'
 import {Windows} from '@/windows/create.ts'
 import {listen} from "@tauri-apps/api/event";
-import {updateAuth} from '@/windows/dbsql'
+import {updateAuth} from '@/utils/dbsql'
 import {isRegistered, register, ShortcutEvent, unregister} from "@tauri-apps/plugin-global-shortcut";
 import {invoke} from "@tauri-apps/api/core";
-import {captureScreenshotMain} from "@/windows/CaptureScreenshotMain.ts";
+import {captureScreenshotMain} from "@/utils/CaptureScreenshotMain.ts";
 import {readImage} from "@tauri-apps/plugin-clipboard-manager"
-import {createScreenshotWindow} from "@/windows/method.ts";
+import {createScreenshotWindow} from "@/utils/method.ts";
+import {translateTheText} from "@/utils/translate.ts";
 
 const windows = new Windows();
 let shortcutsRegistered = false; // 添加标志来防止重复注册
@@ -67,7 +68,13 @@ async function unregisterShortcut(shortcut: string) {
         throw error;
     }
 }
-
+async function get_selected_text() {
+    // 延迟5s执行
+    // await new Promise(resolve => setTimeout(resolve, 5000));
+    const select_text: string = await invoke("get_selected_text",);
+    // alert(select_text)
+    await translateTheText('translate', select_text)
+}
 // 修改 registerShortcutsMain 函数，添加注销旧快捷键的逻辑
 export async function registerShortcutsMain(controller: any = 'default') {
     if (shortcutsRegistered) {
@@ -85,6 +92,7 @@ export async function registerShortcutsMain(controller: any = 'default') {
             fixed_copy: config.shortcut_key.fixed_copy,
             fixed_ocr: config.shortcut_key.fixed_ocr,
             paste_img: config.shortcut_key.paste_img,
+            select_text: config.shortcut_key.select_text,
         };
 
         // 注销所有旧的快捷键
@@ -121,7 +129,11 @@ export async function registerShortcutsMain(controller: any = 'default') {
             readClipboardImage,
             'paste_img'
         );
-
+        await registerShortcuts(
+            config.shortcut_key.select_text,
+            get_selected_text,
+            'select_text'
+        );
         shortcutsRegistered = true;
         console.log(controller, '注册快捷键成功');
         return true;

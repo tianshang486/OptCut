@@ -1,5 +1,5 @@
 // 快捷键执行截图
-import {captureScreenshot} from "@/windows/screenshot.ts";
+import {captureScreenshot} from "@/utils/screenshot.ts";
 
 export async function captureScreenshotMain(controller: any = 'default') {
     if (controller === 'fixed_copy') {

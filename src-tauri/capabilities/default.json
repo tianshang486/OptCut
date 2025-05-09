@@ -10,7 +10,8 @@
     "fixed_*",
     "contextmenu",
     "notification",
-    "translate_settings"
+    "translate_settings",
+    "translate_window"
   ],
   "permissions": [
     "core:default",

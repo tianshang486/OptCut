@@ -7,3 +7,5 @@ pub mod sql;
 pub mod tencent_ocr;
 pub mod translate;
 pub mod tray;
+pub mod capture_screen;
+pub mod offline_ocr;

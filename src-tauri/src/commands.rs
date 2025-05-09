@@ -3,33 +3,21 @@ use crate::utils::img_util::image_to_base64;
 use crate::utils::sql::{get_shortcut_keys, init_db, query_tables};
 use crate::utils::tencent_ocr::{call_tencent_ocr, get_tencent_config};
 use crate::utils::{color, read_conf::read_conf, translate};
-use image::open;
+use image::{ImageBuffer, Rgba};
 use mouse_position::mouse_position::Mouse;
+use selection::get_text;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::{env, os::windows::process::CommandExt, process::Command};
+use std::{env,process::Command};
 use tauri::Emitter;
 use xcap::{image, Monitor};
-use image::{ImageBuffer, Rgba};
+use jieba_rs;
+use base64::{Engine as _, engine::general_purpose};
+use std::fs::File;
+use std::io::Write;
 static TRACKING: AtomicBool = AtomicBool::new(false);
-
-#[derive(Serialize, Deserialize)]
-struct Struct {
-    image_path: String,
-}
-
-impl Struct {
-    // 构造函数，用于初始化 image_path
-    fn new() -> Self {
-        let image_path = env::temp_dir()
-            .join(format!("{}.png", normalized("AGCut")))
-            .to_string_lossy()
-            .to_string();
-        Self { image_path }
-    }
-}
 
 // 获取颜色的 Tauri 命令
 #[tauri::command]
@@ -37,132 +25,6 @@ pub fn get_color_at(x: i32, y: i32) -> Result<String, String> {
     color::get_pixel_color(x, y)
 }
 
-
-#[tauri::command(rename_all = "snake_case")]
-pub async fn ps_ocr(image_path: &str) -> Result<String, String> {
-    println!("image_path: {},开始R_OCR识别", image_path);
-
-    // 获取当前执行文件的目录
-    let current_exe = env::current_exe()
-        .map_err(|e| format!("无法获取当前执行文件路径: {}", e))?;
-    let run_dir = current_exe
-        .parent()
-        .ok_or_else(|| "无法获取执行文件目录".to_string())?;
-    
-    println!("current_exe_dir: {:?}", run_dir);
-
-    // 构建工具路径
-    #[cfg(target_os = "windows")]
-    let exe_path = run_dir.join("tools\\RapidOCR-json_v0.2.0\\RapidOCR-json.exe");
-    #[cfg(target_os = "macos")]
-    let exe_path = run_dir.join("tools/RapidOCR-json_v0.2.0/RapidOCR-json");
-    #[cfg(target_os = "linux")]
-    let exe_path = run_dir.join("tools/RapidOCR-json_v0.2.0/RapidOCR-json");
-
-    // 构建模型目录路径
-    let models_path = run_dir.join("tools/RapidOCR-json_v0.2.0/models");
-
-    println!("exe_path: {:?}, models_path: {:?}", exe_path, models_path);
-
-    #[cfg(target_os = "windows")]
-    let mut command = Command::new(exe_path);
-    #[cfg(target_os = "windows")]
-    command.creation_flags(0x08000000); // CREATE_NO_WINDOW flag
-    #[cfg(not(target_os = "windows"))]
-    let mut command = Command::new(exe_path);
-
-    let output = command
-        .arg("--models")
-        .arg(models_path)
-        .arg("--det")
-        .arg("ch_PP-OCRv4_det_infer.onnx")
-        .arg("--cls")
-        .arg("ch_ppocr_mobile_v2.0_cls_infer.onnx")
-        .arg("--rec")
-        .arg("rec_ch_PP-OCRv4_infer.onnx")
-        .arg("--keys")
-        .arg("ppocr_keys_v1.txt")
-        .arg("--image_path")
-        .arg(image_path)
-        .output()
-        .map_err(|e| format!("执行命令失败: {}", e))?;
-
-    let out: String = String::from_utf8(output.stdout).unwrap();
-    // 按换行符分割字符串,获取第二行
-    let result: String = "[".to_string() + out.split("\n").collect::<Vec<&str>>()[2] + "]";
-    // 转换为json格式
-    let result: serde_json::Value = serde_json::from_str(&result).unwrap();
-    // 输出json格式结果
-    print!("{:?}", result);
-    Ok(result.to_string())
-}
-
-// fn main() -> Result<(), Box<dyn Error>> {
-//     println!("Hello, world!");
-//     Ok(())
-// }
-
-fn normalized(filename: &str) -> String {
-    filename
-        .replace("|", "")
-        .replace("\\", "")
-        .replace(":", "")
-        .replace("/", "")
-}
-
-#[tauri::command(rename_all = "snake_case")]
-pub async fn ps_ocr_pd(image_path: &str) -> Result<String, String> {
-    println!("image_path: {},开始PD_OCR识别", image_path);
-
-    // 获取当前执行文件的目录
-    let current_exe = env::current_exe()
-        .map_err(|e| format!("无法获取当前执行文件路径: {}", e))?;
-    let run_dir = current_exe
-        .parent()
-        .ok_or_else(|| "无法获取执行文件目录".to_string())?;
-    
-    println!("current_exe_dir: {:?}", run_dir);
-
-    // 构建工具路径
-    #[cfg(target_os = "windows")]
-    let exe_path = run_dir.join("tools\\PaddleOCR-json_v1.4.1\\PaddleOCR-json.exe");
-    #[cfg(target_os = "macos")]
-    let exe_path = run_dir.join("tools/PaddleOCR-json_v1.4.1/PaddleOCR-json");
-    #[cfg(target_os = "linux")]
-    let exe_path = run_dir.join("tools/PaddleOCR-json_v1.4.1/PaddleOCR-json");
-
-    println!("exe_path: {:?}", exe_path);
-
-    // 构建配置文件路径
-    let models_path = run_dir.join("tools/PaddleOCR-json_v1.4.1/models/config_chinese.txt");
-
-    #[cfg(target_os = "windows")]
-    let mut command = Command::new(exe_path);
-    #[cfg(target_os = "windows")]
-    command.creation_flags(0x08000000); // CREATE_NO_WINDOW flag
-    #[cfg(not(target_os = "windows"))]
-    let mut command = Command::new(exe_path);
-
-    let output = command
-        .arg("--config_path")
-        .arg(models_path)
-        .arg("--image_path")
-        .arg(image_path)
-        .output()
-        .map_err(|e| format!("执行OCR命令失败: {}", e))?;
-
-    // 获取输出并转换为字符串
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    // 按换行符分割，获取JSON结果（最后一行）
-    let json_line = stdout.lines().last().unwrap_or_default();
-
-    // 解析JSON并处理Unicode编码
-    let decoded_result: serde_json::Value =
-        serde_json::from_str(json_line).map_err(|e| format!("解析JSON失败: {}", e))?;
-
-    print!("{:?}", decoded_result);
-    Ok(decoded_result.to_string())
-}
 
 // 获取鼠标所在位置
 #[tauri::command()]
@@ -173,7 +35,7 @@ pub async  fn get_mouse_position() -> Result<String, String> {
     } else {
         return Err("获取鼠标位置失败".to_string());
     };
-    
+
     Ok(json!({
         "x": x,
         "y": y
@@ -182,76 +44,8 @@ pub async  fn get_mouse_position() -> Result<String, String> {
 }
 
 
-#[tauri::command()]
-pub async fn capture_screen_one() -> Result<String, String> {
-    let my_struct = Struct::new();
-    // get_mouse_position 获取鼠标位置
-    let mouse_position = get_mouse_position().await?;
-    let mouse_position: serde_json::Value = serde_json::from_str(&mouse_position).unwrap();
-    let x = mouse_position["x"].as_i64().unwrap_or_default();
-    let y = mouse_position["y"].as_i64().unwrap_or_default();
-
-
-    // 直接从坐标获取显示器
-    let screen = Monitor::from_point(x as i32, y as i32).map_err(|_| "无法获取显示器信息".to_string())?;
-    println!("{:?}", screen);
-    // 直接截图保存
-    let image_data = screen.capture_image().map_err(|_| "截图失败".to_string())?;
-
-    image_data
-        .save(&my_struct.image_path)
-        .map_err(|_| "保存截图失败".to_string())?;
-
-    // 构建返回数据，处理所有可能的Result
-    Ok(json!({
-        "path": my_struct.image_path.to_string(),
-        "x": x,
-        "y": y,
-        "window_x": screen.x().unwrap_or_default(),
-        "window_y": screen.y().unwrap_or_default(),
-        "width": screen.width().unwrap_or_default(),
-        "height": screen.height().unwrap_or_default()
-    })
-    .to_string())
-}
-
-#[tauri::command()]
-pub fn capture_screen_fixed(x: i32, y: i32, width: u32, height: u32) -> Result<String, String> {
-    let my_struct = Struct::new();
-    // 直接获取鼠标位置和对应屏幕，避免获取所有显示器
-    // 读取原始截图
-    let mut img = open(&my_struct.image_path).map_err(|_| "无法打开原始图片".to_string())?;
-    // 根据鼠标位置获取图片裁剪位置,注意鼠标位置存在负值,要与屏幕尺寸相加
-    // println!("{} {} 图片尺寸", img.width(), x);
-    let x_new: i32 = if x < 0 {
-        img.width() as i32 + x as i32
-    } else if img.width() < x as u32 && x > 0 {
-        x - img.width() as i32 as i32
-    } else {
-        x
-    };
-    // println!("图片尺寸: {}x{} x,y: {},{}", width, height, x_new, y);
-    // 裁剪图片
-    let cropped = img.crop(x_new as u32, y as u32, width, height);
-    // 保存裁剪后的图片,增加时间戳避免覆盖
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    // 保存裁剪后的图片,增加时间戳避免覆盖
-    let path = env::temp_dir().join(format!("AGCut_{}.png", timestamp));
-    cropped
-        .save(&path)
-        .map_err(|_| "保存裁剪图片失败".to_string())?;
-    // 构建返回数据
-    Ok(json!({
-        "path": path.to_string_lossy().to_string(),
-    })
-    .to_string())
-}
-
 // 删除临时文,以AGCut开头的文件
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub fn delete_temp_file() {
     let temp_dir = env::temp_dir();
     let mut entries = temp_dir.read_dir().unwrap();
@@ -273,7 +67,7 @@ pub fn delete_temp_file() {
 }
 
 // 添加新的tauri命令
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command()]
 pub async fn read_config() -> Result<String, String> {
     println!(
         "read_config called from: {:?}",
@@ -285,7 +79,7 @@ pub async fn read_config() -> Result<String, String> {
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub async fn query_database_info() -> Result<String, String> {
     let pool = init_db().await?;
     println!("Database initialized");
@@ -522,4 +316,74 @@ pub async fn write_image(rgba_data: Vec<u8>, width: u32, height: u32) -> Result<
 
     // 返回新文件的路径
     Ok(file_path.to_string_lossy().to_string())
+}
+
+// 新增：获取画布数据并保存为图片
+#[tauri::command]
+pub async fn save_canvas_image(canvas_data: Vec<u8>, width: u32, height: u32, original_path: String) -> Result<String, String> {
+    // 验证数据长度
+    let expected_len = width as usize * height as usize * 4;
+    if canvas_data.len() != expected_len {
+        return Err(format!(
+            "Canvas数据长度不匹配: 期望 {}, 实际 {}",
+            expected_len,
+            canvas_data.len()
+        ));
+    }
+
+    // 创建 ImageBuffer
+    let img = ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, canvas_data)
+        .ok_or_else(|| "无法创建画布图像缓冲区".to_string())?;
+
+    // 直接覆盖原始文件
+    img.save(&original_path)
+        .map_err(|e| format!("保存画布图片失败: {}", e))?;
+
+    println!("画布图片已成功保存到原始路径: {:?}", original_path);
+
+    // 返回原始文件的路径
+    Ok(original_path)
+}
+
+// 获取选中的文本
+#[tauri::command]
+pub async fn get_selected_text() -> Result<String, String> {
+    let selected_text = get_text();
+    println!("选中的文本: {:?}", selected_text);
+    Ok(selected_text)
+}
+
+// 添加分词命令
+#[tauri::command]
+pub async fn jieba_cut(text: String) -> Result<Vec<String>, String> {
+    let jieba = jieba_rs::Jieba::new();
+    let words = jieba.cut(&text, false); // false 表示精确模式
+    Ok(words.into_iter()
+        .map(|s| s.to_string())
+        .filter(|s| !s.trim().is_empty()) // 过滤空白字符
+        .collect())
+}
+
+// 新增：从base64数据保存画布图片
+#[tauri::command]
+pub async fn save_canvas_base64(base64_data: String, original_path: String) -> Result<String, String> {
+    println!("Saving canvas base64 data to: {}", original_path);
+    println!("Base64 data length: {}", base64_data.len());
+
+    // 解码base64数据
+    let decoded = general_purpose::STANDARD
+        .decode(base64_data)
+        .map_err(|e| format!("Failed to decode base64 data: {}", e))?;
+
+    // 创建文件并写入解码后的数据
+    let mut file = File::create(&original_path)
+        .map_err(|e| format!("Failed to create file: {}", e))?;
+    
+    file.write_all(&decoded)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    println!("Canvas image successfully saved to original path: {}", original_path);
+
+    // 返回原始文件的路径
+    Ok(original_path)
 }
