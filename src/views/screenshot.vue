@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {Windows,} from '@/windows/create'
-import {copyImage, createScreenshotWindow,} from '@/utils/method'
+import { createScreenshotWindow,} from '@/utils/method'
 import {computed, onMounted, onUnmounted, ref} from "vue";
 import {PhysicalPosition} from '@tauri-apps/api/window';
 import {invoke} from "@tauri-apps/api/core";
@@ -8,16 +8,21 @@ import {invoke} from "@tauri-apps/api/core";
 const urlParams = new URLSearchParams(window.location.hash.substring(window.location.hash.indexOf('?') + 1));
 const path: any = urlParams.get('path');
 const operationalID:any = urlParams.get('operationalID');
+const monitorId = urlParams.get('monitorId');
 console.log('截图路径', path)
 
 // 读取窗口池中的窗口信息
 // 将异步操作移到 ref 中
 const windowPool = ref<any>([]);
+const currentMonitorId = ref<number>(0);
 
-
+// 从 URL 参数中获取显示器 ID
+if (monitorId) {
+  currentMonitorId.value = parseInt(monitorId);
+}
 
 console.log('窗口池', windowPool)
-
+console.log('当前显示器ID', currentMonitorId.value)
 
 const win: any = new Windows()
 
@@ -41,35 +46,43 @@ const startPos = ref({x: 0, y: 0})
 const currentPos = ref({x: 0, y: 0})
 const overlayStyle = ref({})
 const mouseUpPos = ref({x: 0, y: 0})
-const mouseDownPos = ref({x: 0, y: 0})
-let selectionStyle: any = computed(() => {
-  if (!isDragging.value) {
-    return {
-      width: '0px',
-      height: '0px',
-      display: 'none'
-    }
-  }
-
-  const width = Math.abs(currentPos.value.x - startPos.value.x)
-  const height = Math.abs(currentPos.value.y - startPos.value.y)
-  const left = Math.min(currentPos.value.x, startPos.value.x)
-  const top = Math.min(currentPos.value.y, startPos.value.y)
-
-  return {
-    width: width + 'px',
-    height: height + 'px',
-    left: left + 'px',
-    top: top + 'px',
-    border: '1px solid #1e90ff'
-  }
+const isAltPressed = ref(false)  // Alt 键状态
+const isBoxDragging = ref(false)  // 框拖动状态
+const isResizing = ref(false)    // 调整大小状态
+const resizeDirection = ref('')  // 调整方向
+const originalBox = ref({        // 原始框的位置和大小
+  left: 0,
+  top: 0,
+  width: 0,
+  height: 0
 })
+const showToolbar = ref(false)   // 显示工具栏
+const coordinatesInfo = ref({    // 尺寸信息的位置
+  left: '0px',
+  top: '0px',
+  transform: 'none'
+})
+
+interface SelectionStyle {
+  width: string;
+  height: string;
+  left: string;
+  top: string;
+  display: string;
+  border: string;
+}
+
+let selectionStyle = ref<SelectionStyle>({
+  width: '0px',
+  height: '0px',
+  left: '0px',
+  top: '0px',
+  display: 'none',
+  border: '1px solid #1e90ff'
+})
+
 const mousePos = ref({x: 0, y: 0});
 const currentColor = ref('#000000')
-
-// 添加双击检测变量
-const lastClickTime = ref(0);
-const doubleClickDelay = 300; // 双击间隔时间（毫秒）
 
 // 节流函数，限制执行频率
 const throttle = (fn: Function, delay: number) => {
@@ -95,11 +108,72 @@ const updateColor = async (x: number, y: number) => {
 // 使用节流包装的颜色更新函数
 const throttledUpdateColor = throttle(updateColor, 500);
 
-// 添加鼠标事件处理函数
-// 在 handleMouseDown 中初始化
+// 判断鼠标是否在框的边缘
+const isNearEdge = (x: number, y: number, box: any) => {
+  const edgeSize = 8; // 边缘检测范围
+  const left = box.left;
+  const top = box.top;
+  const right = left + box.width;
+  const bottom = top + box.height;
+
+  // 检查是否在左边缘
+  if (Math.abs(x - left) <= edgeSize && y >= top && y <= bottom) {
+    return 'left';
+  }
+  // 检查是否在右边缘
+  if (Math.abs(x - right) <= edgeSize && y >= top && y <= bottom) {
+    return 'right';
+  }
+  // 检查是否在上边缘
+  if (Math.abs(y - top) <= edgeSize && x >= left && x <= right) {
+    return 'top';
+  }
+  // 检查是否在下边缘
+  if (Math.abs(y - bottom) <= edgeSize && x >= left && x <= right) {
+    return 'bottom';
+  }
+  return '';
+}
+
+// 添加双击检测变量
+const lastClickTime = ref(0);
+const doubleClickDelay = 300; // 双击间隔时间（毫秒）
+
+// 修改鼠标按下事件处理
 const handleMouseDown = (e: MouseEvent) => {
   e.preventDefault();
   isMouseDown = true;
+
+  if (isDragging.value) {
+    // 如果已经画了框，检查是否在框内或边缘
+    const box = {
+      left: parseInt(selectionStyle.value.left),
+      top: parseInt(selectionStyle.value.top),
+      width: parseInt(selectionStyle.value.width),
+      height: parseInt(selectionStyle.value.height)
+    };
+
+    const direction = isNearEdge(e.clientX, e.clientY, box);
+    if (direction) {
+      // 如果在边缘，开始调整大小
+      isResizing.value = true;
+      resizeDirection.value = direction;
+      originalBox.value = { ...box };
+      startPos.value = {x: e.clientX, y: e.clientY}; // 更新起始位置
+    } else if (
+      e.clientX >= box.left &&
+      e.clientX <= box.left + box.width &&
+      e.clientY >= box.top &&
+      e.clientY <= box.top + box.height
+    ) {
+      // 如果在框内，开始拖动
+      isBoxDragging.value = true;
+      originalBox.value = { ...box };
+      startPos.value = {x: e.clientX, y: e.clientY}; // 更新起始位置
+    }
+    return;
+  }
+
   isDragging.value = true;
   startPos.value = {x: e.clientX, y: e.clientY};
   currentPos.value = {x: e.clientX, y: e.clientY};
@@ -109,48 +183,116 @@ const handleMouseDown = (e: MouseEvent) => {
     top: `${e.clientY}px`,
     width: '0px',
     height: '0px',
-    display: 'block'
+    display: 'block',
+    border: '1px solid #1e90ff'
   };
 
-  // 初始化遮罩
   overlayStyle.value = {
     clipPath: 'inset(0 0 0 0)'
   };
-  // 使用物理像素位置
-  // 正确创建 PhysicalPosition 实例
-  mouseUpPos.value = new PhysicalPosition(
-      e.screenX,
-      e.screenY
-  )
-  console.log('鼠标位置开始', mouseUpPos.value.x, mouseUpPos.value.y);
-}
 
+  mouseUpPos.value = new PhysicalPosition(
+    e.screenX,
+    e.screenY
+  );
+};
+
+// 更新尺寸信息的位置
+const updateCoordinatesInfo = (left: number, top: number) => {
+  const infoTop = top - 45;
+  coordinatesInfo.value = {
+    left: `${left}px`,
+    top: `${infoTop}px`,
+    transform: infoTop < 60 ? 'translateY(60px)' : 'none'
+  };
+};
+
+// 修改鼠标移动事件处理
 const handleMouseMove = async (e: MouseEvent) => {
-  if (!isDragging.value) return;
+  if (!isMouseDown) return;
   e.preventDefault();
 
-  // 更新当前位置
+  if (isDragging.value && (isBoxDragging.value || isResizing.value)) {
+    const deltaX = e.clientX - startPos.value.x;
+    const deltaY = e.clientY - startPos.value.y;
+
+    if (isBoxDragging.value) {
+      // 拖动整个框
+      const newLeft = originalBox.value.left + deltaX;
+      const newTop = originalBox.value.top + deltaY;
+      selectionStyle.value = {
+        ...selectionStyle.value,
+        left: `${newLeft}px`,
+        top: `${newTop}px`,
+        border: '1px solid #1e90ff'
+      };
+      // 更新遮罩层
+      updateOverlay(newLeft, newTop, originalBox.value.width, originalBox.value.height);
+      // 更新尺寸信息位置
+      updateCoordinatesInfo(newLeft, newTop);
+    } else if (isResizing.value) {
+      // 调整框的大小
+      const newBox = { ...originalBox.value };
+      switch (resizeDirection.value) {
+        case 'left':
+          newBox.left = originalBox.value.left + deltaX;
+          newBox.width = originalBox.value.width - deltaX;
+          break;
+        case 'right':
+          newBox.width = originalBox.value.width + deltaX;
+          break;
+        case 'top':
+          newBox.top = originalBox.value.top + deltaY;
+          newBox.height = originalBox.value.height - deltaY;
+          break;
+        case 'bottom':
+          newBox.height = originalBox.value.height + deltaY;
+          break;
+      }
+      selectionStyle.value = {
+        left: `${newBox.left}px`,
+        top: `${newBox.top}px`,
+        width: `${newBox.width}px`,
+        height: `${newBox.height}px`,
+        display: 'block',
+        border: '1px solid #1e90ff'
+      };
+      // 更新遮罩层
+      updateOverlay(newBox.left, newBox.top, newBox.width, newBox.height);
+      // 更新尺寸信息位置
+      updateCoordinatesInfo(newBox.left, newBox.top);
+    }
+    return;
+  }
+
+  if (!isDragging.value) return;
+
   currentPos.value = {
-    x: Math.round(e.clientX), // 取整以避免小数点导致的抖动
+    x: Math.round(e.clientX),
     y: Math.round(e.clientY)
   };
 
-  // 计算选择框的位置和大小
   const left = Math.min(startPos.value.x, currentPos.value.x);
   const top = Math.min(startPos.value.y, currentPos.value.y);
   const width = Math.abs(currentPos.value.x - startPos.value.x);
   const height = Math.abs(currentPos.value.y - startPos.value.y);
 
-  // 更新选择框样式
   selectionStyle.value = {
     left: `${left}px`,
     top: `${top}px`,
     width: `${width}px`,
     height: `${height}px`,
-    display: 'block'
+    display: 'block',
+    border: '1px solid #1e90ff'
   };
 
-  // 更新遮罩层的 clipPath
+  updateOverlay(left, top, width, height);
+  // 更新尺寸信息位置
+  updateCoordinatesInfo(left, top);
+};
+
+// 添加更新遮罩层的函数
+const updateOverlay = (left: number, top: number, width: number, height: number) => {
   overlayStyle.value = {
     clipPath: `polygon(
       0 0, 100% 0, 100% 100%, 0 100%,
@@ -162,35 +304,25 @@ const handleMouseMove = async (e: MouseEvent) => {
       ${left}px ${top}px
     )`
   };
-}
+};
 
-interface ScreenshotResult {
-  path: string;
-  width: number;
-  height: number;
-  window_x: number;
-  window_y: number;
-}
 // 修改鼠标抬起事件处理
 const handleMouseUp = async (e: MouseEvent) => {
   if (!isMouseDown) return;
 
-  // 如果是右键，直接返回，不执行任何截图操作
   if (e.button === 2) {
     isMouseDown = false;
     return;
   }
 
   e.preventDefault();
-  isDragging.value = false;
 
   // 检测双击
   const currentTime = new Date().getTime();
   const timeDiff = currentTime - lastClickTime.value;
 
-  if (e.button === 0 && timeDiff < doubleClickDelay) {
-    await copyImage(path.replace('http://asset.localhost/', ''))
-    console.log('触发双击全屏截图');
+  if (e.button === 0 && timeDiff < doubleClickDelay && selectionStyle.value.display === 'block') {
+    await handleScreenshot();
     isMouseDown = false;
     lastClickTime.value = 0; // 重置点击时间
     return;
@@ -198,44 +330,91 @@ const handleMouseUp = async (e: MouseEvent) => {
 
   lastClickTime.value = currentTime;
 
-  selectionStyle.value = {
-    width: '0px',
-    height: '0px',
-    display: 'none'
-  };
-  overlayStyle.value = {};
-  mouseDownPos.value = new PhysicalPosition(
-      e.screenX,
-      e.screenY
-  )
-  console.log('鼠标位置结束', mouseUpPos.value.x, mouseUpPos.value.y);
-  let width = Math.abs(Math.abs(mouseUpPos.value.x) - Math.abs(mouseDownPos.value.x));
-  let height = Math.abs(Math.abs(mouseUpPos.value.y) - Math.abs(mouseDownPos.value.y));
-  // 判断起始点和结束点,绝对值更小的为坐标轴的方向
-  let x = Math.min(mouseUpPos.value.x, mouseDownPos.value.x);
-  let y = Math.min(mouseUpPos.value.y, mouseDownPos.value.y);
-  isMouseDown = false;
-
-  // 只在左键点击且移动距离小于2px时执行全屏截图
-  if (width <= 2 && height <= 2) {
-    console.log('误操作忽律');
-  } else if (e.button === 0) { // 只在左键点击时执行区域截图
-    console.log('截图区域');
-    const result: ScreenshotResult = JSON.parse(await invoke('capture_screen_fixed', {
-      x: x,
-      y: y,
-      width: width,
-      height: height,
-    }));
-    await createScreenshotWindow(x, y, width, height,operationalID,result);
-  } else { // 其他情况忽略
-    alert('浮窗数量已达到上限，请关闭部分窗口后再试')
+  if (isDragging.value && !isBoxDragging.value && !isResizing.value) {
+    // 如果是新画的框，显示工具栏
+    showToolbar.value = true;
   }
-}
 
-// 添加监控鼠标位置和屏幕边界的功能
-const monitors = ref<any[]>([]);
+  isBoxDragging.value = false;
+  isResizing.value = false;
+  isMouseDown = false;
+};
 
+// 修改键盘事件处理函数
+const handleKeyDown = async (e: KeyboardEvent) => {
+  if (e.key === 'Alt') {
+    isAltPressed.value = true;
+    // 如果 Alt 键按下且有选择框，执行截图
+    if (isDragging.value || (selectionStyle.value.width !== '0px' && selectionStyle.value.height !== '0px')) {
+      await handleScreenshot();
+    }
+  }
+};
+
+const handleKeyUp = (e: KeyboardEvent) => {
+  if (e.key === 'Alt') {
+    isAltPressed.value = false;
+  }
+};
+
+// 执行截图
+const handleScreenshot = async () => {
+  if (!isDragging.value) return;
+
+  // 获取当前鼠标位置
+  const mousePosition = await invoke<string>('get_mouse_position');
+  const mousePos = JSON.parse(mousePosition) as { x: number, y: number };
+
+  // 获取所有显示器信息
+  const monitors: any[] = JSON.parse(await invoke('get_all_monitors') as string);
+  const targetMonitor = monitors.find(m => {
+    return mousePos.x >= m.x && 
+           mousePos.x < (m.x + m.width) && 
+           mousePos.y >= m.y && 
+           mousePos.y < (m.y + m.height);
+  }) || monitors.find(m => m.is_primary) || monitors[0];
+
+  if (targetMonitor) {
+    currentMonitorId.value = targetMonitor.id;
+  }
+
+  // 使用 selectionStyle 中的值计算相对于显示器的坐标
+  const left = parseInt(selectionStyle.value.left);
+  const top = parseInt(selectionStyle.value.top);
+  const width = parseInt(selectionStyle.value.width);
+  const height = parseInt(selectionStyle.value.height);
+
+  // 计算实际的屏幕坐标
+  const screenX = targetMonitor.x + left;
+  const screenY = targetMonitor.y + top;
+
+  const result: ScreenshotResult = JSON.parse(await invoke('capture_screen_fixed', {
+    x: screenX,
+    y: screenY,
+    width: width,
+    height: height,
+  }));
+
+  await createScreenshotWindow(screenX, screenY, width, height, operationalID, result);
+  
+  // 关闭截图窗口
+  const win = new Windows();
+  await win.closeWin('screenshot');
+};
+
+// 获取当前窗口
+const getCurrentWindow = async () => {
+  const currentWindow = await win.getWin('screenshot');
+  if (currentWindow) {
+    // 获取所有显示器信息
+    const monitors: any[] = JSON.parse(await invoke('get_all_monitors') as string);
+    const targetMonitor = monitors.find(m => m.id === currentMonitorId.value);
+    if (targetMonitor) {
+      // 设置窗口位置到目标显示器
+      await currentWindow.setPosition(new PhysicalPosition(targetMonitor.x, targetMonitor.y));
+    }
+  }
+};
 
 // 修改全局鼠标移动处理函数
 const handleGlobalMouseMove = async (e: MouseEvent) => {
@@ -252,16 +431,20 @@ onMounted(async () => {
   document.addEventListener('mousedown', handleMouseDown)
   document.addEventListener('mousemove', handleMouseMove)
   document.addEventListener('mouseup', handleMouseUp)
+  document.addEventListener('keydown', handleKeyDown)
+  document.addEventListener('keyup', handleKeyUp)
   
-  // 立即获取显示器信息
-  // await fetchMonitors();
-  console.log('组件挂载完成，显示器信息:', monitors.value);
+  // 设置窗口位置到正确的显示器
+  await getCurrentWindow();
+  console.log('组件挂载完成，当前显示器ID:', currentMonitorId.value);
 })
 
 onUnmounted(() => {
   document.removeEventListener('mousedown', handleMouseDown)
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', handleMouseUp)
+  document.removeEventListener('keydown', handleKeyDown)
+  document.removeEventListener('keyup', handleKeyUp)
 })
 
 // 添加计算属性
@@ -272,6 +455,14 @@ const selectionWidth = computed(() => {
 const selectionHeight = computed(() => {
   return Math.abs(currentPos.value.y - startPos.value.y)
 })
+
+interface ScreenshotResult {
+  path: string;
+  width: number;
+  height: number;
+  window_x: number;
+  window_y: number;
+}
 </script>
 <template>
   <div class="screenshot-container space-x-0 space-y-0" @mousemove="handleGlobalMouseMove">
@@ -279,11 +470,7 @@ const selectionHeight = computed(() => {
     <div class="selection-box" :style="selectionStyle"></div>
     <div class="overlay" :style="overlayStyle"></div>
     <div class="coordinates-info" v-if="isDragging"
-         :style="{
-           left: startPos.x + 'px',
-           top: (startPos.y - 45) + 'px',
-           transform: startPos.y < 60 ? 'translateY(60px)' : 'none'
-         }">
+         :style="coordinatesInfo">
       <span>起点: ({{ startPos.x }}, {{ startPos.y }})</span>
       <span>大小: {{ selectionWidth }} x {{ selectionHeight }}</span>
     </div>

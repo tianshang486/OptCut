@@ -237,11 +237,8 @@ onMounted(async () => {
 
   // 处理 fixed_copy 和 fixed_ocr
   if (operationalID === 'fixed_copy') {
-    console.log('复制图片', path)
-    await copyImage(path)
-
-    console.log('关闭窗口', label)
-    await NewWindows.closeWin(label)
+    await emit('copy_image', { path: image_path.value });
+    await emit('close_fixed', { label: label });
   }
 
   if (operationalID === 'fixed_ocr') {
@@ -252,15 +249,6 @@ onMounted(async () => {
       await emit('ocrImage', img)
     }, 500)
   }
-  
-  // 监听菜单复制命令
-  listen('menu_copy_image', async (event: any) => {
-    console.log('接收到菜单复制命令:', event);
-    if (event.payload && event.payload.path) {
-      await copyImage(event.payload.path);
-    }
-  });
-
   // 监听右键菜单事件
   document.addEventListener('contextmenu', CreateContextMenu);
   // 监听点击事件关闭菜单
@@ -399,9 +387,13 @@ const copyAllText = async () => {
   } else {
     // 如果没有OCR,则复制图片
     try {
-      console.log('复制图片, paintingTools状态:', paintingTools?.hasDrawings());
-      await copyImage(path);
-      await showToast('复制图片成功', 'success');
+      // 传入图片路径，让copyImage方法决定使用画布内容还是原始图片
+      const success = await copyImage(image_path.value);
+      if (success) {
+        await showToast('复制图片成功', 'success');
+      } else {
+        await showToast('复制图片失败', 'error');
+      }
     } catch (error) {
       console.error('Failed to copy image:', error);
       await showToast('复制失败', 'error');
@@ -435,7 +427,9 @@ const stopDrag = () => {
 const isPaintingMode = ref(false)
 
 const drag = async (event: MouseEvent) => {
-  if (isDragging.value && !isPaintingMode.value) {
+  // 只有当没有按下Ctrl键时才执行窗口拖动功能
+  // 如果按住Ctrl键，我们希望让fabric.js来处理拖动
+  if (isDragging.value && !isPaintingMode.value && !event.ctrlKey) {
     const dx = event.screenX - dragStart.value.x
     const dy = event.screenY - dragStart.value.y
 
@@ -645,7 +639,7 @@ const scrollToItem = (index: number) => {
   display: flex;
   width: 100vw;
   height: 100vh;
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   box-sizing: border-box;
@@ -661,14 +655,15 @@ const scrollToItem = (index: number) => {
   right: 0;
   bottom: 0;
   pointer-events: none;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15); /* 更淡的白色边框 */
+  box-shadow: inset 0 0 3px 3px rgba(255, 255, 255, 0.15), /* 更淡的白色边框 */ 0 0 20px rgba(255, 0.05, 0.05, 0.1); /* 外发光效果 */
   transition: box-shadow 0.3s ease;
+  z-index: 1; /* 低于背景层 */
 }
 
 /* 当容器被选中或悬停时的效果 */
 .screenshot-container:hover::after,
 .screenshot-container:focus-within::after {
-  box-shadow: inset 0 0 0 1px rgba(33, 150, 243, 0.2), /* 非常淡的蓝色边框 */ 0 0 20px rgba(33, 150, 243, 0.1); /* 柔和的外发光效果 */
+  box-shadow: inset 0 0 3px 3px rgba(33, 150, 243, 0.2), /* 非常淡的蓝色边框 */ 0 0 20px rgba(33, 150, 243, 0.1); /* 柔和的外发光效果 */
 }
 
 #c {

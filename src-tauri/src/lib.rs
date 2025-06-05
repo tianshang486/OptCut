@@ -8,7 +8,7 @@ use crate::commands::{
     baidu_translate, baidu_translate_test, delete_temp_file, get_all_monitors, get_color_at,
     get_mouse_position, get_selected_text,  query_database_info, read_config,
     restart_app, save_shortcuts, stop_mouse_tracking, tencent_ocr, tencent_ocr_test,
-    track_mouse_position, write_image, jieba_cut, save_canvas_image, save_canvas_base64
+    track_mouse_position, write_image, jieba_cut, save_canvas_image, save_canvas_base64,greet
 };
 use crate::utils::capture_screen::{capture_screen_fixed, capture_screen_one};
 use crate::utils::offline_ocr::{ps_ocr, ps_ocr_pd};
@@ -61,6 +61,7 @@ pub fn run() {
             jieba_cut,
             save_canvas_image,
             save_canvas_base64,
+            greet,
         ])
         // 阻止默认关闭事件,弹窗提示是否关闭窗口
         .on_window_event(|window, event| match event {

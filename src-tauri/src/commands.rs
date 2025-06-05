@@ -1,22 +1,19 @@
-// use paddleocr::Ppocr;
-use crate::utils::img_util::image_to_base64;
 use crate::utils::sql::{get_shortcut_keys, init_db, query_tables};
 use crate::utils::tencent_ocr::{call_tencent_ocr, get_tencent_config};
 use crate::utils::{color, read_conf::read_conf, translate};
+use base64::{engine::general_purpose, Engine as _};
 use image::{ImageBuffer, Rgba};
+use jieba_rs;
 use mouse_position::mouse_position::Mouse;
 use selection::get_text;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::{env,process::Command};
-use tauri::Emitter;
-use xcap::{image, Monitor};
-use jieba_rs;
-use base64::{Engine as _, engine::general_purpose};
+use std::env;
 use std::fs::File;
 use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::Emitter;
+use xcap::{image, Monitor};
 static TRACKING: AtomicBool = AtomicBool::new(false);
 
 // 获取颜色的 Tauri 命令
@@ -25,6 +22,12 @@ pub fn get_color_at(x: i32, y: i32) -> Result<String, String> {
     color::get_pixel_color(x, y)
 }
 
+// 测试 Tauri 命令
+#[tauri::command(rename_all = "snake_case")]
+pub async fn greet(image_path: String) -> Result<String, String> {
+    println!("greet called from: {:?}", std::backtrace::Backtrace::capture()); // 添加调用栈跟踪
+    Ok(format!("Hello, World!\n Image path: {}", image_path))
+}
 
 // 获取鼠标所在位置
 #[tauri::command()]
@@ -152,11 +155,12 @@ pub async fn restart_app(app_handle: tauri::AppHandle) -> Result<(), String> {
     }
 
     #[cfg(not(debug_assertions))]
+
     {
         // 生产环境下的重启逻辑
         let current_exe =
             env::current_exe().map_err(|e| format!("Failed to get current exe path: {}", e))?;
-
+        use std::process::Command;
         Command::new(&current_exe)
             .spawn()
             .map_err(|e| format!("Failed to start new process: {}", e))?;
@@ -166,10 +170,6 @@ pub async fn restart_app(app_handle: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-pub async fn read_image_base64(path: String) -> Result<String, String> {
-    image_to_base64(Path::new(&path)).map_err(|e| e.to_string())
-}
 
 #[tauri::command]
 pub async fn tencent_ocr(image_path: String) -> Result<String, String> {

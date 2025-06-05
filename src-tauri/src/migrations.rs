@@ -65,7 +65,7 @@ pub fn get_migrations() -> Vec<Migration> {
             INSERT INTO system_config (config_key, config_value, extra) VALUES
                 ('version', '1.0.0', '版本号'),
                 ('language', 'zh-CN', '界面语言'),
-                ('ocr_engine', 'RapidOCR', '离线OCR引擎'),
+                ('ocr_engine', 'PaddleOCR', '离线OCR引擎'),
                 ('ocr_mode', 'offline', 'OCR模式：online/offline'),
                 ('ocr_panel_visible', 'true', 'OCR结果面板显示状态'),
                 ('tencent_secret_id', '', '腾讯云SecretId'),

@@ -6,7 +6,7 @@ import {isRegistered, register, ShortcutEvent, unregister} from "@tauri-apps/plu
 import {invoke} from "@tauri-apps/api/core";
 import {captureScreenshotMain} from "@/utils/CaptureScreenshotMain.ts";
 import {readImage} from "@tauri-apps/plugin-clipboard-manager"
-import {createScreenshotWindow} from "@/utils/method.ts";
+import {copyImage, createScreenshotWindow} from "@/utils/method.ts";
 import {translateTheText} from "@/utils/translate.ts";
 
 const windows = new Windows();
@@ -288,4 +288,27 @@ export async function readClipboardImage() {
         console.error('处理剪贴板图片失败:', error);
         throw error;
     }
+}
+
+//监听关闭和复制图片事件
+export async function listenClipboardImage() {
+    try {
+        await listen('copy_image', async (event: any) => {
+            const {path} = event.payload;
+            await copyImage(path);
+        });
+        } catch (error) {
+            console.error('设置复制图片事件监听器时出错:', error);
+        }
+        await listen('close_fixed', async (event: any) => {
+            const {label} = event.payload;
+            try {
+                const win = await windows.getWin(label)
+                if (win) {
+                    await win.close();
+                }
+            } catch (error) {
+                console.error('处理关闭图片窗口事件时出错:', error);
+            }
+        });
 }

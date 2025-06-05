@@ -32,8 +32,8 @@ import {onMounted, ref} from 'vue'
 import {Image} from "@tauri-apps/api/image";
 import {Windows,} from '@/windows/create'
 import {emit, listen} from "@tauri-apps/api/event";
-import { updateAuth } from '@/utils/dbsql';
-import { translateTheText } from '@/utils/translate';
+import {updateAuth} from '@/utils/dbsql';
+import {translateTheText} from '@/utils/translate';
 
 // 定义菜单项类型
 interface MenuItem {
@@ -59,32 +59,30 @@ const label: any = ref(params.get('label'))
 const is_ocr: any = ref(params.get('is_ocr') === 'true') // 获取 OCR 状态
 const is_translated: any = ref(params.get('is_translated') === 'true') // 从 URL 获取翻译状态
 const show_ocr_panel: any = ref(params.get('show_ocr_panel') === 'true') // 获取 OCR 面板显示状态
-console.log(image_path.value, label.value,'父信息')// const image_ocr: any = ref([])
+console.log(image_path.value, label.value, '父信息')// const image_ocr: any = ref([])
 
 const menuItems: MenuItem[] = [
-  { 
-    label: '复制', 
+  {
+    label: '复制',
     handler: async () => {
       // 使用emit向主窗口发送复制命令
-      await emit('menu_copy_image', { path: image_path.value });
+      await emit('copy_image', {path: image_path.value});
       await NewWindows.closeWin('contextmenu');
     },
     disabled: false
   },
-  { 
-    label: '复制关闭', 
+  {
+    label: '复制关闭',
     handler: async () => {
       // 使用emit向主窗口发送复制命令
-      await emit('menu_copy_image', { path: image_path.value });
+      await emit('copy_image', {path: image_path.value});
       // 等待第二个窗口关闭
-      NewWindows.closeWin('contextmenu');
-      // 等待第一个窗口关闭
-      NewWindows.closeWin(label.value);
+      await emit('close_fixed', {label: label.value});
     },
     disabled: false
   },
-  { 
-    label: 'OCR', 
+  {
+    label: 'OCR',
     handler: async () => {
       const img = await readFileImage(image_path.value)
       ocr(img)
@@ -92,8 +90,8 @@ const menuItems: MenuItem[] = [
     },
     disabled: is_ocr.value // OCR 后禁用
   },
-  { 
-    label: '取消OCR', 
+  {
+    label: '取消OCR',
     handler: () => {
       emit('ocrImage', null)
       is_translated.value = false // 重置翻译状态
@@ -101,13 +99,13 @@ const menuItems: MenuItem[] = [
     },
     disabled: !is_ocr.value // 未 OCR 时禁用
   },
-  { 
+  {
     label: show_ocr_panel.value ? '隐藏展示栏' : '显示展示栏',
     handler: async () => {
       // 更新数据库配置
-      await updateAuth('system_config', 
-        { config_value: (!show_ocr_panel.value).toString() }, 
-        { config_key: 'ocr_panel_visible' }
+      await updateAuth('system_config',
+          {config_value: (!show_ocr_panel.value).toString()},
+          {config_key: 'ocr_panel_visible'}
       );
       // 发送事件更新界面
       await emit('toggleOcrPanel')
@@ -116,8 +114,8 @@ const menuItems: MenuItem[] = [
     },
     disabled: !is_ocr.value // 未 OCR 时禁用
   },
-  { 
-    label: '翻译', 
+  {
+    label: '翻译',
     handler: async () => {
       await translateTheText()
       is_translated.value = true;
@@ -125,26 +123,26 @@ const menuItems: MenuItem[] = [
     },
     disabled: !is_ocr.value || is_translated.value // 未 OCR 或已翻译时禁用
   },
-  { 
-    label: '翻译设置', 
+  {
+    label: '翻译设置',
     handler: async () => {
       const sourceLabel = label.value;
       const currentWindow = await NewWindows.getWin(sourceLabel);
       let x = 100;
       let y = 100;
-      
+
       // 获取当前窗口位置设置翻译窗口位置
       if (currentWindow) {
         const position = await currentWindow.outerPosition();
         x = position.x;
         y = position.y - 40; // 设置在窗口顶部上方
-        
+
         // 重要：监听窗口关闭事件
         await currentWindow.onCloseRequested(async () => {
           await NewWindows.closeWin('translate_settings');
         });
       }
-      
+
       await NewWindows.createWin({
         label: 'translate_settings',
         url: `/#/translate-settings?sourceLabel=${sourceLabel}`,
@@ -157,13 +155,13 @@ const menuItems: MenuItem[] = [
         alwaysOnTop: true,
         skipTaskbar: true,
       }, {});
-      
+
       await NewWindows.closeWin('contextmenu');
     },
     disabled: false
   },
-  { 
-    label: '取消翻译', 
+  {
+    label: '取消翻译',
     handler: async () => {
       await emit('cancelTranslate')
       is_translated.value = false
@@ -171,12 +169,14 @@ const menuItems: MenuItem[] = [
     },
     disabled: !is_ocr.value || !is_translated.value // 未 OCR 或未翻译时禁用
   },
-  { 
-    label: '关闭窗口', 
+  {
+    label: '关闭窗口',
     handler: async () => {
-      await NewWindows.closeWin(label.value)
-      await NewWindows.closeWin('translate_settings')
-      await NewWindows.closeWin('contextmenu')
+      console.log(label.value)
+      await emit('close_fixed', {label: 'translate_settings'})
+      await emit('close_fixed', {label: label.value})
+      await emit('close_fixed', {label: 'contextmenu'})
+
     },
     disabled: false
   }

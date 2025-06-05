@@ -1,7 +1,7 @@
 import {createApp} from "vue";
 import App from "./App.vue";
 import router from './router/index';
-import {listenShortcuts,  listenFixedWindows} from "@/windows/ShortcutRegistration";
+import {listenShortcuts,  listenFixedWindows,listenClipboardImage} from "@/windows/ShortcutRegistration";
 import pinia from './stores'  //引入
 import './app.css';
 import i18n from './i18n';
@@ -68,5 +68,6 @@ async function initAutoStart() {
 async function registerShortcutsAll() {
     await listenShortcuts();
     await listenFixedWindows();
+    await listenClipboardImage();
 }
 

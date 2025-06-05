@@ -6,6 +6,7 @@ import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
 import { Windows } from "@/windows/create.ts";
 import { queryAuth, updateAuth } from '@/utils/dbsql'
 import { emit } from "@tauri-apps/api/event";
+import {showToast} from "@/utils/toast.ts";
 
 const image_path = ref("");
 
@@ -29,61 +30,75 @@ export async function readFileImage(path: string) {
 }
 
 // 复制图片到剪贴板
-export const copyImage = async (path: string): Promise<any> => {
-    // await invoke("copied_to_clipboard", {image_path: path});
-    try {
-        // 清理路径
-        const cleanPath = path.replace('http://asset.localhost/', '');
-        
-        // 先检查全局是否有paintingTools实例
-        // @ts-ignore
-        const activePaintingTools = window.activePaintingTools;
-        
-        if (activePaintingTools && activePaintingTools.hasDrawings()) {
-            try {
-                console.log('检测到有绘画内容，尝试保存绘画后的图片');
-                
-                // 使用导出方法获取合成后的图像
-                const dataUrl = await activePaintingTools.exportCanvas();
-                
-                if (dataUrl) {
-                    console.log('成功获取到绘画画布的数据');
-                    
-                    // 将Data URL转换为二进制数据
-                    const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
-                    
-                    // 调用Rust函数保存画布数据到原始文件
-                    await invoke('save_canvas_base64', {
-                        base64Data: base64Data,
-                        originalPath: cleanPath
-                    });
-                    
-                    console.log('已保存绘画内容到原始图片文件');
-                }
-            } catch (e) {
-                console.error('导出绘画内容失败:', e);
-            }
-        }
-        
-        // 读取图片（可能已被更新）
-        const img: any = await readFileImage(cleanPath);
-        
-        // 如果失败则重试,如果提示线程没有打开的粘贴板，则需要打开粘贴板
-        try {
-            await writeImage(img);
-            // alert(path + " 复制成功");
-        } catch (e) {
-            console.error(e);
-            //   延迟2秒重试
-            setTimeout(() => {
-                copyImage(path);
-            }, 3000);
-        }
-    } catch (e) {
-        console.error('图片读取失败:', e);
-        return;
+export async function copyImage(path?: string) {  // 使path参数可选
+  try {
+    // 获取当前活动的画布
+    // @ts-ignore
+    const paintingTools = window.activePaintingTools;
+    
+    // 如果有画布实例且有绘图内容，使用画布内容
+    if (paintingTools && paintingTools.hasDrawings()) {
+      console.log('检测到有绘画内容，使用画布内容');
+      const canvas = paintingTools.canvas;
+      
+      // 创建一个临时画布来合并背景图片和绘图内容
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      if (!tempCtx) {
+        console.error('无法创建临时画布上下文');
+        return false;
+      }
+
+      // 设置临时画布尺寸与原始画布相同
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+
+      // 将原始画布内容绘制到临时画布
+      tempCtx.drawImage(canvas.lowerCanvasEl, 0, 0);
+
+      // 将临时画布转换为blob
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        tempCanvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('无法创建图片blob'));
+          }
+        }, 'image/png');
+      });
+
+      // 将blob转换为ArrayBuffer
+      const arrayBuffer = await blob.arrayBuffer();
+      
+      // 使用Tauri的clipboard API复制图片
+      await writeImage(new Uint8Array(arrayBuffer));
+      await showToast('复制成功', 'success')
+    } 
+    // 如果没有画布实例或没有绘图内容，使用原始图片
+
+    else if (path) {
+      console.log('使用原始图片路径');
+      // 清理路径
+      const cleanPath = path.replace('http://asset.localhost/', '');
+      
+      // 读取原始图片
+      const img = await readFileImage(cleanPath);
+      
+      // 复制到剪贴板
+      await writeImage(img);
+        //  通知窗口
+        await showToast('复制成功',  'success')
+    } else {
+      console.error('既没有画布内容也没有图片路径');
+      return false;
     }
-};
+    
+    return true;
+  } catch (error) {
+    console.error('复制图片失败:', error);
+    return false;
+  }
+}
 
 
 // 初始化函数
@@ -93,7 +108,9 @@ const windowPool = ref<any>([]);
 
 // 删除窗口的函数,将state设置为0
 const removeWindowFromPool = (windowName: string) => {
-    updateAuth('windowPool', { state: 1, windowName: windowName }, { windowName: windowName })
+    updateAuth('windowPool', {state: 1, windowName: windowName}, {windowName: windowName}).then(() => {
+        console.log('删除窗口成功', windowName)
+    })
 }
 
 
@@ -161,8 +178,5 @@ export const createScreenshotWindow = async (x: number, y: number, width: number
 
 
 export default {
-    openDialog,
-    readFileImage,
     createScreenshotWindow,
-    copyImage
 };
