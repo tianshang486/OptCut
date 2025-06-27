@@ -81,7 +81,7 @@ export async function initializeTray() {
         // 创建托盘
         trayInstance = await TrayIcon.new({
             id: TRAY_ID,
-            icon: 'icons/aa.ico',
+            icon: 'icons/icon.ico',
             title: 'OptCutTray',
             action: async (event: TrayIconEvent) => {
                 if (event.type === 'Click' && event.button === 'Left') {

@@ -65,8 +65,8 @@ const menuItems: MenuItem[] = [
   {
     label: '复制',
     handler: async () => {
-      // 使用emit向主窗口发送复制命令
-      await emit('copy_image', {path: image_path.value});
+      // 发送智能复制命令，不传递路径，让主窗口自己决定复制什么
+      await emit('copy_image', {});
       await NewWindows.closeWin('contextmenu');
     },
     disabled: false
@@ -74,8 +74,8 @@ const menuItems: MenuItem[] = [
   {
     label: '复制关闭',
     handler: async () => {
-      // 使用emit向主窗口发送复制命令
-      await emit('copy_image', {path: image_path.value});
+      // 发送智能复制命令，不传递路径，让主窗口自己决定复制什么
+      await emit('copy_image', {});
       // 等待第二个窗口关闭
       await emit('close_fixed', {label: label.value});
     },

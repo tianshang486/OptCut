@@ -6,7 +6,7 @@ import {isRegistered, register, ShortcutEvent, unregister} from "@tauri-apps/plu
 import {invoke} from "@tauri-apps/api/core";
 import {captureScreenshotMain} from "@/utils/CaptureScreenshotMain.ts";
 import {readImage} from "@tauri-apps/plugin-clipboard-manager"
-import {copyImage, createScreenshotWindow} from "@/utils/method.ts";
+import {createScreenshotWindow} from "@/utils/method.ts";
 import {translateTheText} from "@/utils/translate.ts";
 
 const windows = new Windows();
@@ -290,15 +290,14 @@ export async function readClipboardImage() {
     }
 }
 
-//监听关闭和复制图片事件
+//监听关闭窗口事件
 export async function listenClipboardImage() {
     try {
-        await listen('copy_image', async (event: any) => {
-            const {path} = event.payload;
-            await copyImage(path);
-        });
+        // 移除全局的 copy_image 监听器，让具体组件自己处理
+        // 这样避免重复执行复制操作
+        console.log('全局事件监听器已初始化（不包含copy_image）');
         } catch (error) {
-            console.error('设置复制图片事件监听器时出错:', error);
+            console.error('设置事件监听器时出错:', error);
         }
         await listen('close_fixed', async (event: any) => {
             const {label} = event.payload;

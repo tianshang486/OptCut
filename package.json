@@ -12,7 +12,6 @@
     "tauri:dev": "tauri dev"
   },
   "dependencies": {
-    "@rollup/rollup-win32-x64-msvc": "^4.31.0",
     "@tauri-apps/api": "^2.5.0",
     "@tauri-apps/plugin-autostart": "^2.3.0",
     "@tauri-apps/plugin-clipboard-manager": "^2.2.0",
@@ -37,7 +36,7 @@
     "tailwindcss": "^3.4.17",
     "terser": "^5.38.1",
     "typescript": "^5.7.2",
-    "vite": "^6.0.7",
+    "vite": "^6.3.5",
     "vite-plugin-remove-console": "^2.2.0",
     "vue-tsc": "2.1.10"
   }

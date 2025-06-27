@@ -18,9 +18,9 @@ onMounted(() => {
 // 工具配置
 const tools = [
   { name: 'rect', icon: '⬜', label: '矩形' },
-  { 
-    name: 'arrow', 
-    icon: '➡', 
+  {
+    name: 'arrow',
+    icon: '➡',
     label: '箭头',
     hasDropdown: false,
     dropdownItems: [
@@ -28,9 +28,9 @@ const tools = [
       { value: 'arrow2', icon: '⟶' }
     ]
   },
-  { 
-    name: 'line', 
-    icon: '—', 
+  {
+    name: 'line',
+    icon: '—',
     label: '直线',
     hasDropdown: false,
     dropdownItems: [
@@ -39,7 +39,9 @@ const tools = [
     ]
   },
   { name: 'brush', icon: '✏️', label: '画笔' },
-  { name: 'text', icon: 'T', label: '文本' }
+  { name: 'mosaic', icon: '🔳', label: '马赛克' },
+  { name: 'text', icon: 'T', label: '文本' },
+  { name: 'number', icon: '①', label: '序号' }
 ]
 
 // 颜色选项
@@ -85,6 +87,14 @@ const switchColor = async (color: string) => {
   })
 }
 
+// 重置序号计数器
+const resetNumberCounter = async () => {
+  const sourceLabel = new URLSearchParams(window.location.search).get('sourceLabel')
+  await emit('reset-number-counter', {
+    targetLabel: sourceLabel
+  })
+}
+
 // 添加取消绘图方法
 const cancelDrawing = async () => {
   // @ts-ignore
@@ -103,22 +113,22 @@ const cancelDrawing = async () => {
       <!-- 工具组 -->
       <div class="tools-group">
         <!-- 修改取消按钮，添加选中状态 -->
-        <div 
-          class="tool-item cancel-btn" 
+        <div
+          class="tool-item cancel-btn"
           :class="{ active: store.currentTool === null }"
-          @click="cancelDrawing" 
+          @click="cancelDrawing"
           title="取消绘图"
         >
           ✕
         </div>
-        <div 
-          v-for="tool in tools" 
+        <div
+          v-for="tool in tools"
           :key="tool.name"
           class="tool-wrapper"
         >
           <div
             class="tool-item"
-            :class="{ 
+            :class="{
               active: store.currentTool === tool.name,
               disabled: toolsDisabled
             }"
@@ -127,7 +137,7 @@ const cancelDrawing = async () => {
           >
             {{ tool.icon }}
           </div>
-          <div 
+          <div
             v-if="tool.hasDropdown"
             class="dropdown-trigger"
             @click.stop="tool.name === 'arrow' ? showArrowDropdown = !showArrowDropdown : showLineDropdown = !showLineDropdown"
@@ -135,7 +145,7 @@ const cancelDrawing = async () => {
             ▼
           </div>
           <!-- 下拉菜单 -->
-          <div 
+          <div
             v-if="tool.hasDropdown && ((tool.name === 'arrow' && showArrowDropdown) || (tool.name === 'line' && showLineDropdown))"
             class="dropdown-menu"
           >
@@ -162,14 +172,31 @@ const cancelDrawing = async () => {
           v-for="color in colors"
           :key="color.value"
           class="color-item"
-          :class="{ 
+          :class="{
             active: store.currentColor === color.value,
             disabled: toolsDisabled
           }"
-          :style="{ backgroundColor: color.value, border: color.value === '#FFFFFF' ? '1px solid #ddd' : 'none' }"
+          :style="{ backgroundColor: color.value }"
           @click.stop="!toolsDisabled && switchColor(color.value)"
           :title="color.label"
         />
+      </div>
+
+      <!-- 分隔线 -->
+      <div class="separator px-0.5">
+        |
+      </div>
+
+      <!-- 重置序号按钮 -->
+      <div class="reset-group">
+        <div
+          class="tool-item reset-btn"
+          :class="{ disabled: toolsDisabled }"
+          @click.stop="!toolsDisabled && resetNumberCounter()"
+          title="重置序号"
+        >
+          🔄
+        </div>
       </div>
     </div>
   </div>
@@ -181,7 +208,7 @@ const cancelDrawing = async () => {
 }
 
 
-.tools-group, .colors-group {
+.tools-group, .colors-group, .reset-group {
   display: flex;
   gap: 4px;
   align-items: center;
@@ -255,11 +282,12 @@ const cancelDrawing = async () => {
 
 
 .color-item {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .tool-item:hover {
@@ -275,7 +303,8 @@ const cancelDrawing = async () => {
 }
 
 .color-item.active {
-  box-shadow: 0 0 0 2px #fff;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
 }
 
 /* 添加取消按钮样式 */

@@ -262,6 +262,29 @@ onMounted(async () => {
     }
   });
 
+  // 显示复制快捷键提示
+  console.log('复制快捷键说明:');
+  console.log('Ctrl+C: 智能复制（有文字复制文字，无文字复制图片）');
+  console.log('Ctrl+Shift+C: 强制复制原始图片（不包含绘图）');
+  console.log('Ctrl+Alt+C: 复制当前图片（包含绘图）');
+
+  // 监听右键菜单的复制事件
+  listen('copy_image', async (event: any) => {
+    console.log('收到右键菜单复制事件:', event.payload);
+    console.log('当前图片路径:', image_path.value);
+
+    // 使用智能复制逻辑，传递正确的图片路径
+    try {
+      const success = await copyImage(image_path.value);
+      if (!success) {
+        await showToast('复制图片失败', 'error');
+      }
+    } catch (error) {
+      console.error('右键复制失败:', error);
+      await showToast('复制失败', 'error');
+    }
+  });
+
   // 获取页面大小
   const img = new Image();
   img.crossOrigin = "anonymous"; // 添加跨域支持
@@ -319,7 +342,7 @@ onMounted(async () => {
           toolbarWin = await NewWindows.createWin({
             label: 'Toolbar',
             url: `/#/painting-toolbar?sourceLabel=${label}`,
-            width: 350,
+            width: 450,
             height: 40,
             x: x,
             y: y,
@@ -370,9 +393,10 @@ const copyText = async (text: string) => {
   }
 };
 
-// 修改复制全部文本的函数
+// 智能复制函数 - 根据当前状态决定复制内容
 const copyAllText = async () => {
-  if (is_ocr.value && image_ocr.value && image_ocr.value.data) {
+  // 情况1: 有OCR文字内容，复制文字
+  if (is_ocr.value && image_ocr.value && image_ocr.value.data && image_ocr.value.data.length > 0) {
     try {
       const texts = image_ocr.value.data.map(item =>
           isTranslated.value && item.translatedText ? item.translatedText : item.text
@@ -380,23 +404,73 @@ const copyAllText = async () => {
 
       await writeText(texts);
       await showToast('复制文本成功', 'success');
+      return;
     } catch (error) {
       console.error('Failed to copy text:', error);
-      await showToast('复制失败', 'error');
+      await showToast('复制文本失败', 'error');
+      return;
     }
-  } else {
-    // 如果没有OCR,则复制图片
-    try {
-      // 传入图片路径，让copyImage方法决定使用画布内容还是原始图片
-      const success = await copyImage(image_path.value);
-      if (success) {
-        await showToast('复制图片成功', 'success');
-      } else {
-        await showToast('复制图片失败', 'error');
-      }
-    } catch (error) {
-      console.error('Failed to copy image:', error);
-      await showToast('复制失败', 'error');
+  }
+
+  // 情况2: 没有OCR文字，复制图片
+  await copyCurrentImage();
+};
+
+// 复制当前图片（智能选择绘图版本或原图）
+const copyCurrentImage = async () => {
+  try {
+    const success = await copyImage(image_path.value);
+    if (!success) {
+      await showToast('复制图片失败', 'error');
+    }
+  } catch (error) {
+    console.error('Failed to copy image:', error);
+    await showToast('复制失败', 'error');
+  }
+};
+
+// 强制复制原始图片（不包含绘图）
+const copyOriginalImage = async () => {
+  try {
+    console.log('Ctrl+Shift+C 触发，强制复制原图');
+    console.log('图片路径:', image_path.value);
+    console.log('forceOriginal 参数: true');
+
+    const success = await copyImage(image_path.value, true); // 强制使用原图
+    if (!success) {
+      await showToast('复制原图失败', 'error');
+    }
+  } catch (error) {
+    console.error('Failed to copy original image:', error);
+    await showToast('复制原图失败', 'error');
+  }
+};
+
+// 统一的键盘事件处理函数
+const handleKeyDown = async (event: KeyboardEvent) => {
+  // 检查是否是复制相关的快捷键
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
+    event.preventDefault(); // 阻止默认行为
+
+    console.log('检测到复制快捷键组合:');
+    console.log('- Ctrl:', event.ctrlKey);
+    console.log('- Shift:', event.shiftKey);
+    console.log('- Alt:', event.altKey);
+    console.log('- Key:', event.key);
+
+    // 精确匹配快捷键组合
+    if (event.shiftKey && !event.altKey) {
+      // Ctrl+Shift+C: 强制复制原图
+      console.log('执行 Ctrl+Shift+C: 强制复制原图');
+      await copyOriginalImage();
+    } else if (event.altKey && !event.shiftKey) {
+      // Ctrl+Alt+C: 复制当前图片
+      console.log('执行 Ctrl+Alt+C: 复制当前图片');
+      await copyCurrentImage();
+    } else if (!event.shiftKey && !event.altKey) {
+      // Ctrl+C: 智能复制
+      console.log('执行 Ctrl+C: 智能复制');
+      await copyAllText();
     }
   }
 };
@@ -555,7 +629,7 @@ const scrollToItem = (index: number) => {
       @mouseup="stopDrag"
       @mousemove="drag"
       @mouseleave="stopDrag"
-      @keydown.ctrl.c.prevent="copyAllText"
+      @keydown="handleKeyDown"
       tabindex="0"
   >
     <!-- Canvas 始终显示 -->

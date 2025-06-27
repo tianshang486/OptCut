@@ -23,6 +23,9 @@ export class PaintingTools {
 // 用于画笔
     private currentText: any = null // 用于文本输入
 
+    // 用于序号功能
+    private numberCounter: number = 1 // 序号计数器，从1开始
+
     // 添加特殊标记用于跟踪最后创建的箭头
     // @ts-ignore
     private lastArrow: any = null
@@ -198,8 +201,8 @@ export class PaintingTools {
                 if (this.shapes.length > 0) {
                     try {
                         // 弹出最后一个元素
-                        this.shapes.pop();
-                        console.log('已从shapes数组移除最后一个对象，剩余对象数:', this.shapes.length);
+                        const removedShape = this.shapes.pop();
+                        console.log('已从shapes数组移除最后一个对象:', removedShape?.type || 'unknown', '剩余对象数:', this.shapes.length);
 
                         // 清空画布，只保留背景图像
                         const backgroundImage = this.findBackgroundImage();
@@ -218,6 +221,12 @@ export class PaintingTools {
                         // 更新画布
                         this.canvas.requestRenderAll();
                         console.log('撤销完成，画布已重绘，当前对象数量:', this.canvas.getObjects().length);
+
+                        // 如果移除的是序号，需要减少计数器
+                        if (removedShape && (removedShape as any).isNumber) {
+                            this.numberCounter = Math.max(1, this.numberCounter - 1);
+                            console.log('序号计数器已调整为:', this.numberCounter);
+                        }
                     } catch (error) {
                         console.error('撤销操作失败:', error);
                     }
@@ -302,6 +311,12 @@ export class PaintingTools {
             const {color} = event.payload
             this.setColor(color)
             console.log('颜色变化:', color)
+        })
+
+        // 监听重置序号事件
+        listen('reset-number-counter', async () => {
+            this.resetNumberCounter()
+            console.log('序号计数器已重置')
         })
 
         this.initializeEvents()
@@ -508,7 +523,7 @@ export class PaintingTools {
         }
 
         // 如果没有选择工具，不处理绘图
-        if (!this.store.currentTool || !['rect', 'line', 'arrow', 'text'].includes(this.store.currentTool)) {
+        if (!this.store.currentTool || !['rect', 'line', 'arrow', 'text', 'number', 'mosaic'].includes(this.store.currentTool)) {
             return;
         }
 
@@ -581,6 +596,47 @@ export class PaintingTools {
                 this.currentText.enterEditing();
                 this.canvas.requestRenderAll();
                 this.shapes.push(this.currentText);
+                break;
+            case 'number':
+                // 序号工具特殊处理 - 直接创建序号文本
+                const numberText = this.createNumberText(pointer.x, pointer.y);
+                this.canvas.add(numberText);
+
+                // 更新缓存
+                this.updateObjectCache(numberText);
+
+                // 添加到shapes数组以支持撤销
+                this.shapes.push(numberText);
+
+                this.canvas.requestRenderAll();
+                console.log('序号创建完成，已添加到shapes数组');
+
+                // 序号工具不需要拖拽绘制，直接完成
+                this.isDrawing = false;
+                this.currentShape = null;
+                return; // 直接返回，不继续执行后续代码
+                break;
+            case 'mosaic':
+                // 马赛克工具 - 创建矩形区域预览
+                this.currentShape = new fabric.Rect({
+                    left: this.startX,
+                    top: this.startY,
+                    width: 0,
+                    height: 0,
+                    fill: 'rgba(128, 128, 128, 0.4)', // 灰色半透明预览
+                    stroke: this.store.currentColor,
+                    strokeWidth: 1,
+                    strokeDashArray: [6, 3], // 虚线边框
+                    selectable: false,
+                    hasControls: false,
+                    hasBorders: false,
+                    lockMovementX: true,
+                    lockMovementY: true,
+                    evented: true,
+                    hoverCursor: 'move'
+                });
+                // 添加自定义属性标记这是马赛克
+                (this.currentShape as any).isMosaic = true;
                 break;
         }
 
@@ -669,6 +725,17 @@ export class PaintingTools {
 
                         this.currentShape.setCoords();
                     }
+                    break;
+                case 'mosaic':
+                    // 马赛克工具的鼠标移动处理，与矩形类似
+                    const mosaicWidth = Math.abs(pointer.x - this.startX);
+                    const mosaicHeight = Math.abs(pointer.y - this.startY);
+                    this.currentShape.set({
+                        left: Math.min(this.startX, pointer.x),
+                        top: Math.min(this.startY, pointer.y),
+                        width: mosaicWidth,
+                        height: mosaicHeight
+                    });
                     break;
             }
             this.canvas.renderAll();
@@ -775,6 +842,32 @@ export class PaintingTools {
 
                 // 为箭头对象添加标记
                 (this.currentShape as any).isArrow = true;
+            }
+
+            // 马赛克工具特殊处理
+            if (this.store.currentTool === 'mosaic' && (this.currentShape as any).isMosaic) {
+                // 移除临时的矩形
+                this.canvas.remove(this.currentShape);
+
+                // 创建真正的马赛克效果
+                const mosaicGroup = this.createMosaicEffect(this.currentShape as fabric.Rect);
+
+                // 添加马赛克组到画布
+                this.canvas.add(mosaicGroup);
+
+                // 更新缓存和shapes数组
+                this.updateObjectCache(mosaicGroup);
+                this.shapes.push(mosaicGroup);
+
+                console.log('马赛克创建完成');
+
+                // 重新渲染画布
+                this.canvas.requestRenderAll();
+
+                // 重置状态
+                this.isDrawing = false;
+                this.currentShape = null;
+                return;
             }
 
             // 关键修复：保存当前对象
@@ -1449,4 +1542,294 @@ export class PaintingTools {
     }
 
     // 添加专门的初始化函数，可以在创建对象后调用确保对象可拖动
+
+    // 创建序号文本
+    private createNumberText(x: number, y: number): fabric.IText {
+        // 生成带圆圈的序号
+        const numberText = this.getCircledNumber(this.numberCounter);
+
+        // 创建文本对象
+        const textObj = new fabric.IText(numberText, {
+            left: x,
+            top: y,
+            fontSize: 24,
+            fill: this.store.currentColor,
+            fontFamily: 'Arial, sans-serif',
+            textAlign: 'center',
+            originX: 'center',
+            originY: 'center',
+            selectable: this.isCtrlPressed,
+            hasControls: this.isCtrlPressed,
+            hasBorders: this.isCtrlPressed,
+            lockMovementX: !this.isCtrlPressed,
+            lockMovementY: !this.isCtrlPressed,
+            evented: true,
+            hoverCursor: 'move',
+            editable: false // 序号不可编辑
+        }) as fabric.IText & { isNumber?: boolean };
+
+        // 添加标记用于撤销时识别
+        textObj.isNumber = true;
+
+        // 增加计数器
+        this.numberCounter++;
+
+        console.log(`创建序号: ${numberText}, 下一个序号: ${this.numberCounter}`);
+
+        return textObj;
+    }
+
+    // 获取带圆圈的数字
+    private getCircledNumber(num: number): string {
+        // 带圆圈的数字字符映射 (1-20)
+        const circledNumbers = [
+            '①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩',
+            '⑪', '⑫', '⑬', '⑭', '⑮', '⑯', '⑰', '⑱', '⑲', '⑳',
+            '㉑', '㉒', '㉓', '㉔', '㉕', '㉖', '㉗', '㉘', '㉙', '㉚',
+            '㉛', '㉜', '㉝', '㉞', '㉟', '㊱', '㊲', '㊳', '㊴', '㊵',
+            '㊶', '㊷', '㊸', '㊹', '㊺', '㊻', '㊼', '㊽', '㊾', '㊿',
+        ];
+
+        if (num <= 50) {
+            return circledNumbers[num - 1];
+        } else {
+            // 超过20的数字，使用普通数字加圆圈
+            return `⊙${num}`;
+        }
+    }
+
+    // 重置序号计数器
+    public resetNumberCounter(): void {
+        this.numberCounter = 1;
+        console.log('序号计数器已重置为1');
+    }
+
+// 高性能导出画布内容
+    public async exportCanvasOptimized(): Promise<Uint8Array> {
+        console.log('开始高性能导出画布内容');
+        const startTime = performance.now();
+
+        try {
+            // 方法1: 直接使用底层canvas的toBlob方法（最快）
+            // 使用类型断言来访问 Fabric.js 特有的属性
+            const canvasElement = (this.canvas as any).lowerCanvasEl as HTMLCanvasElement;
+
+            if (canvasElement && typeof canvasElement.toBlob === 'function') {
+                const blob = await new Promise<Blob>((resolve, reject) => {
+                    canvasElement.toBlob((blob: Blob | null) => {
+                        if (blob) {
+                            resolve(blob);
+                        } else {
+                            reject(new Error('无法创建canvas blob'));
+                        }
+                    }, 'image/png', 1.0);
+                });
+
+                const arrayBuffer = await blob.arrayBuffer();
+                const uint8Array = new Uint8Array(arrayBuffer);
+
+                const endTime = performance.now();
+                console.log(`高性能导出完成，耗时: ${endTime - startTime}ms，数据大小: ${uint8Array.length} bytes`);
+
+                return uint8Array;
+            } else {
+                // 如果无法访问 lowerCanvasEl，使用降级方法
+                console.log('无法访问 lowerCanvasEl，使用降级方法');
+                return await this.exportCanvasFallback();
+            }
+        } catch (error) {
+            console.error('高性能导出失败，使用降级方法:', error);
+            return await this.exportCanvasFallback();
+        }
+    }
+
+    // 降级导出方法
+    private async exportCanvasFallback(): Promise<Uint8Array> {
+        console.log('使用降级导出方法');
+        const startTime = performance.now();
+
+        // 使用fabric.js的toDataURL方法
+        const dataURL = this.canvas.toDataURL({
+            format: 'png',
+            quality: 0.95, // 稍微降低质量以提升性能
+            multiplier: 1,
+            enableRetinaScaling: false
+        });
+
+        // 解析base64数据
+        const base64Data = dataURL.split(',')[1];
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        const endTime = performance.now();
+        console.log(`降级导出完成，耗时: ${endTime - startTime}ms，数据大小: ${bytes.length} bytes`);
+
+        return bytes;
+    }
+
+    // 获取画布尺寸信息
+    public getCanvasInfo(): { width: number, height: number, hasDrawings: boolean } {
+        return {
+            width: this.canvas.width || 0,
+            height: this.canvas.height || 0,
+            hasDrawings: this.hasDrawings()
+        };
+    }
+
+    // 内存优化的导出方法（适用于大图片）
+    public async exportCanvasMemoryOptimized(): Promise<Uint8Array> {
+        console.log('开始内存优化导出');
+        performance.now();
+        const canvasInfo = this.getCanvasInfo();
+        const pixelCount = canvasInfo.width * canvasInfo.height;
+
+        // 如果图片很大（超过2M像素），使用分块处理
+        if (pixelCount > 2000000) {
+            console.log('检测到大图片，使用分块处理');
+            return await this.exportLargeCanvasInChunks();
+        } else {
+            // 小图片直接使用优化方法
+            return await this.exportCanvasOptimized();
+        }
+    }
+
+    // 分块处理大图片
+    private async exportLargeCanvasInChunks(): Promise<Uint8Array> {
+        console.log('使用分块方法处理大图片');
+
+        // 对于大图片，我们降低质量以减少内存使用
+        const dataURL = this.canvas.toDataURL({
+            format: 'jpeg', // 使用JPEG格式减少文件大小
+            quality: 0.8,   // 降低质量
+            multiplier: 0.8, // 缩小尺寸
+            enableRetinaScaling: false
+        });
+
+        // 分块解析base64数据以减少内存峰值
+        const base64Data = dataURL.split(',')[1];
+        const chunkSize = 1024 * 1024; // 1MB chunks
+        const chunks: Uint8Array[] = [];
+
+        for (let i = 0; i < base64Data.length; i += chunkSize) {
+            const chunk = base64Data.slice(i, i + chunkSize);
+            const binaryString = atob(chunk);
+            const bytes = new Uint8Array(binaryString.length);
+
+            for (let j = 0; j < binaryString.length; j++) {
+                bytes[j] = binaryString.charCodeAt(j);
+            }
+
+            chunks.push(bytes);
+
+            // 给浏览器一个喘息的机会
+            if (i % (chunkSize * 4) === 0) {
+                await new Promise(resolve => setTimeout(resolve, 1));
+            }
+        }
+
+        // 合并所有块
+        const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+        const result = new Uint8Array(totalLength);
+        let offset = 0;
+
+        for (const chunk of chunks) {
+            result.set(chunk, offset);
+            offset += chunk.length;
+        }
+
+        console.log('大图片分块处理完成');
+        return result;
+    }
+
+    // 检查是否应该使用内存优化
+    public shouldUseMemoryOptimization(): boolean {
+        const canvasInfo = this.getCanvasInfo();
+        const pixelCount = canvasInfo.width * canvasInfo.height;
+        const estimatedMemoryMB = (pixelCount * 4) / (1024 * 1024); // RGBA = 4 bytes per pixel
+
+        console.log(`画布尺寸: ${canvasInfo.width}x${canvasInfo.height}, 预估内存: ${estimatedMemoryMB.toFixed(2)}MB`);
+
+        // 如果预估内存使用超过50MB，建议使用内存优化
+        return estimatedMemoryMB > 50;
+    }
+
+    // 创建马赛克效果 - 使用像素化模拟模糊
+    private createMosaicEffect(rect: fabric.Rect): fabric.Group {
+        const left = rect.left || 0;
+        const top = rect.top || 0;
+        const width = rect.width || 0;
+        const height = rect.height || 0;
+
+        // 马赛克块大小
+        const blockSize = 12;
+        const blocks: fabric.Rect[] = [];
+
+        // 预定义的灰色调色板，模拟模糊后的颜色
+        const grayColors = [
+            '#f0f0f0', '#e8e8e8', '#e0e0e0', '#d8d8d8', '#d0d0d0',
+            '#c8c8c8', '#c0c0c0', '#b8b8b8', '#b0b0b0', '#a8a8a8',
+            '#a0a0a0', '#989898', '#909090', '#888888', '#808080'
+        ];
+
+        // 生成马赛克块网格
+        for (let x = 0; x < width; x += blockSize) {
+            for (let y = 0; y < height; y += blockSize) {
+                const blockWidth = Math.min(blockSize, width - x);
+                const blockHeight = Math.min(blockSize, height - y);
+
+                // 随机选择灰色，模拟模糊效果
+                const randomColor = grayColors[Math.floor(Math.random() * grayColors.length)];
+
+                const block = new fabric.Rect({
+                    left: x,
+                    top: y,
+                    width: blockWidth,
+                    height: blockHeight,
+                    fill: randomColor,
+                    stroke: 'none',
+                    selectable: false,
+                    evented: false
+                });
+
+                blocks.push(block);
+            }
+        }
+
+        // 添加一个半透明的覆盖层，增强遮挡效果
+        const overlay = new fabric.Rect({
+            left: 0,
+            top: 0,
+            width: width,
+            height: height,
+            fill: 'rgba(240, 240, 240, 0.3)', // 轻微的白色覆盖
+            stroke: 'none',
+            selectable: false,
+            evented: false
+        });
+
+        blocks.push(overlay);
+
+        // 创建马赛克组
+        const mosaicGroup = new fabric.Group(blocks, {
+            left: left,
+            top: top,
+            selectable: this.isCtrlPressed,
+            hasControls: this.isCtrlPressed,
+            hasBorders: this.isCtrlPressed,
+            lockMovementX: !this.isCtrlPressed,
+            lockMovementY: !this.isCtrlPressed,
+            evented: true,
+            hoverCursor: 'move'
+        }) as fabric.Group & { isMosaic?: boolean };
+
+        // 添加标记
+        mosaicGroup.isMosaic = true;
+
+        console.log('马赛克效果创建完成');
+        return mosaicGroup;
+    }
 }
