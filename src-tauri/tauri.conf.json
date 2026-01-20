@@ -21,7 +21,17 @@
     ],
     "security": {
       "capabilities": [
-        "default"
+        "default",
+        {
+          "identifier": "shell-open",
+          "description": "允许打开外部程序",
+          "windows": [
+            "shell:allow-open"
+          ],
+          "permissions": [
+            "shell:allow-open"
+          ]
+        }
       ],
       "assetProtocol": {
         "enable": true,
@@ -43,7 +53,8 @@
       "icons/icon.icns"
     ],
     "resources": [
-      "tools/**/*"
+      "tools/**/*",
+      "words/**/*"
     ]
   },
   "plugins": {

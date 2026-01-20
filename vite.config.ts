@@ -34,6 +34,10 @@ export default defineConfig(async (): Promise<any> => ({
             ignored: ["**/src-tauri/**"],
         }
     },
+    // 忽略 HTML 文件的解析错误
+    optimizeDeps: {
+        exclude: ['*.html'] // 排除所有 .html 文件
+    },
     //     配置别名
     resolve: {
         alias: {

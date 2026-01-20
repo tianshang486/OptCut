@@ -11,10 +11,13 @@ use serde_json::json;
 use std::env;
 use std::fs::File;
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::Emitter;
+use tauri::{AppHandle, Emitter, Runtime, Url};
 use xcap::{image, Monitor};
 static TRACKING: AtomicBool = AtomicBool::new(false);
+use std::process::Command;
+
 
 // 获取颜色的 Tauri 命令
 #[tauri::command]
@@ -386,4 +389,143 @@ pub async fn save_canvas_base64(base64_data: String, original_path: String) -> R
 
     // 返回原始文件的路径
     Ok(original_path)
+}
+
+// 注意：需要传入 AppHandle，Tauri 命令中可通过参数获取
+// 核心命令：强制用浏览器打开（绕过系统关联）
+#[tauri::command]
+pub async fn open_file_with_browser<R: Runtime>(
+    _app_handle: AppHandle<R>, // 2.x中访问本地文件无需AppHandle，仅保留参数兼容你的调用
+    file_path: String
+) -> Result<String, String> {
+    println!("🔄 正在使用浏览器打开文件: {}", file_path);
+
+    // ========== 核心：仅用标准库处理路径（Tauri 2.x 最稳定方式） ==========
+    // 步骤1：将传入路径转为绝对路径（解决打包后工作目录变化问题）
+    let abs_path = match dunce::canonicalize(Path::new(&file_path)) {
+        Ok(p) => p,
+        Err(e) => return Err(format!("❌ 无法转换为绝对路径: {}", e)),
+    };
+
+    // 步骤2：检查文件是否存在
+    if !abs_path.exists() {
+        return Err(format!("❌ 文件不存在: {}", abs_path.display()));
+    }
+
+    // 步骤3：转换为 file:// 协议的URL（浏览器可识别）
+    let file_url = match Url::from_file_path(&abs_path) {
+        Ok(url) => url,
+        Err(e) => return Err(format!("❌ 无法转换为文件URL: {:?}", e)),
+    };
+    println!("🌐 转换后的文件URL: {}", file_url);
+
+    #[cfg(target_os = "windows")]
+    {
+        // ========== 关键：精准定位 Edge 浏览器（Windows 内置，必存在） ==========
+        // 1. 获取 Edge 安装路径（从系统环境变量/默认路径）
+        let edge_paths = [
+            // Windows 10/11 64位默认路径
+            format!("{}\\Microsoft\\Edge\\Application\\msedge.exe", env::var("PROGRAMFILES").unwrap_or("C:\\Program Files".to_string())),
+            // 32位系统路径
+            format!("{}\\Microsoft\\Edge\\Application\\msedge.exe", env::var("PROGRAMFILES(X86)").unwrap_or("C:\\Program Files (x86)".to_string())),
+            // 用户目录备用路径
+            format!("{}\\AppData\\Local\\Microsoft\\Edge\\Application\\msedge.exe", env::var("USERPROFILE").unwrap_or("C:\\Users\\Default".to_string())),
+        ];
+
+        // 2. 找到存在的 Edge 路径并调用
+        let mut edge_exe = String::new();
+        for path in edge_paths {
+            if Path::new(&path).exists() {
+                edge_exe = path;
+                break;
+            }
+        }
+
+        if !edge_exe.is_empty() {
+            // 强制用 Edge 打开文件 URL（彻底绕过系统关联）
+            match Command::new(&edge_exe)
+                .args(["--new-window", (&file_url).as_ref()]) // 新窗口打开
+                .spawn()
+            {
+                Ok(_) => {
+                    println!("✅ 已强制使用 Microsoft Edge 打开文件");
+                    return Ok(format!("✅ 正在用 Edge 浏览器打开: {}", file_path));
+                }
+                Err(e) => {
+                    println!("⚠️  Edge 调用失败: {}", e);
+                }
+            }
+        }
+
+        // 3. Edge 失败时，尝试 Chrome（备用）
+        let chrome_paths = [
+            format!("{}\\Google\\Chrome\\Application\\chrome.exe", env::var("PROGRAMFILES").unwrap_or("C:\\Program Files".to_string())),
+            format!("{}\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe", env::var("USERPROFILE").unwrap_or("C:\\Users\\Default".to_string())),
+        ];
+        for path in chrome_paths {
+            if Path::new(&path).exists() {
+                match Command::new(&path)
+                    .args(["--new-window", (&file_url).as_ref()])
+                    .spawn()
+                {
+                    Ok(_) => {
+                        println!("✅ 已强制使用 Google Chrome 打开文件");
+                        return Ok(format!("✅ 正在用 Chrome 浏览器打开: {}", file_path));
+                    }
+                    Err(e) => {
+                        println!("⚠️  Chrome 调用失败: {}", e);
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // 4. 最后兜底（仍可能走默认程序，但保证功能不挂）
+        match Command::new("rundll32.exe")
+            .args(["url.dll,FileProtocolHandler", &file_path])
+            .spawn()
+        {
+            Ok(_) => {
+                println!("⚠️  已调用系统默认程序打开（建议检查 .html 文件关联）");
+                Ok(format!("✅ 正在用系统默认程序打开: {}", file_path))
+            }
+            Err(e) => {
+                println!("❌ 所有方法都失败: {}", e);
+                Err(format!("❌ 无法打开文件: {}", e))
+            }
+        }
+    }
+
+    // macOS/Linux 逻辑（无需修改，原本就生效）
+    #[cfg(target_os = "macos")]
+    {
+        match open(
+            &app_handle,
+            &file_url,
+            Some("com.apple.Safari")
+        ) {
+            Ok(_) => {
+                println!("✅ 已使用 Safari 打开文件");
+                Ok(format!("✅ 正在用 Safari 打开: {}", file_path))
+            }
+            Err(e) => {
+                println!("❌ 打开失败: {}", e);
+                Err(format!("❌ 无法用浏览器打开文件: {}", e))
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        match Command::new("xdg-open").arg(&file_url).spawn() {
+            Ok(_) => {
+                println!("✅ 已使用默认浏览器打开文件");
+                Ok(format!("✅ 正在用默认浏览器打开: {}", file_path))
+            }
+            Err(e) => {
+                println!("❌ 打开失败: {}", e);
+                Err(format!("❌ 无法用浏览器打开文件: {}", e))
+            }
+        }
+    }
 }

@@ -80,36 +80,58 @@ pub async fn ps_ocr_pd(image_path: &str) -> Result<String, String> {
     #[cfg(target_os = "linux")]
     let exe_path = run_dir.join("tools/PaddleOCR-json_v1.4.1/PaddleOCR-json");
 
-    // 构建配置文件路径
-    let models_path = run_dir.join("tools/PaddleOCR-json_v1.4.1/models/config_chinese.txt");
+    // 构建配置文件路径 - 修改这里
+    // 使用绝对路径而不是相对路径
+    let config_path = exe_path
+        .parent()
+        .ok_or_else(|| "无法获取工具目录".to_string())?
+        .join("models/config_chinese.txt");
 
-    println!("exe_path: {:?}, models_path: {:?}", exe_path, models_path);
+    println!("exe_path: {:?}, models_path: {:?}", exe_path, config_path);
+
+    // 检查文件是否存在
+    if !exe_path.exists() {
+        return Err(format!("工具文件不存在: {:?}", exe_path));
+    }
+    if !config_path.exists() {
+        return Err(format!("配置文件不存在: {:?}", config_path));
+    }
 
     #[cfg(target_os = "windows")]
-    let mut command = Command::new(exe_path);
+    let mut command = Command::new(&exe_path);
     #[cfg(target_os = "windows")]
     command.creation_flags(0x08000000); // CREATE_NO_WINDOW flag
     #[cfg(not(target_os = "windows"))]
-    let mut command = Command::new(exe_path);
+    let mut command = Command::new(&exe_path);
+
+    // 移除 current_dir(run_dir)，不设置工作目录
+    // 或者设置为工具所在的目录
+    let tool_dir = exe_path.parent().ok_or("无法获取工具目录")?;
 
     let output = command
-        .current_dir(run_dir) // 设置工作目录为应用程序目录
+        .current_dir(tool_dir) // 设置为工具自己的目录
         .arg("--config_path")
-        .arg(models_path)
+        .arg(&config_path)
         .arg("--image_path")
         .arg(image_path)
         .output()
         .map_err(|e| format!("执行OCR命令失败: {}", e))?;
 
-    // 获取输出并转换为字符串
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    // 按换行符分割，获取JSON结果（最后一行）
-    let json_line = stdout.lines().last().unwrap_or_default();
+    // 打印完整输出用于调试
+    let stdout = String::from_utf8_lossy(&output.stdout);
 
-    // 解析JSON并处理Unicode编码
+    // 查找JSON结果行
+    let json_line = stdout
+        .lines()
+        .rev() // 从最后开始查找，因为JSON通常在最后
+        .find(|line| line.trim().starts_with('{') && line.trim().ends_with('}'))
+        .ok_or_else(|| format!("未找到JSON输出，完整输出:\n{}", stdout))?;
+
+    println!("找到OCR结果: {}", json_line);
+
+    // 解析JSON
     let decoded_result: serde_json::Value =
         serde_json::from_str(json_line).map_err(|e| format!("解析JSON失败: {}", e))?;
 
-    print!("{:?}", decoded_result);
     Ok(decoded_result.to_string())
 }

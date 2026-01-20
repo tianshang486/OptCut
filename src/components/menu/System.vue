@@ -31,7 +31,12 @@
       </select>
       <p class="text-sm text-gray-400 mt-1">{{ $t('settings.languageDescription') }}</p>
     </div>
+    <div class="mb-4 p-4 bg-gray-800 rounded-lg">
 
+    <button @click="openHtmlFile" class="w-full p-2 bg-blue-600 hover:bg-blue-700 rounded text-gray-200 transition-colors">
+      打开教程
+    </button>
+    </div>
     <!-- 字体设置 -->
     <div class="mb-4 p-4 bg-gray-800 rounded-lg">
       <label class="block text-gray-300 mb-2">{{ $t('settings.font') }}</label>
@@ -55,7 +60,7 @@
         <div class="relative">
           <div class="max-h-96 overflow-y-auto custom-scrollbar bg-gray-900 rounded-lg border border-gray-700">
             <!-- 系统默认字体选项 -->
-            <div 
+            <div
               class="p-3 cursor-pointer hover:bg-gray-800 transition-colors border-b border-gray-700"
               :class="{'bg-blue-600 hover:bg-blue-700': selectedFont === 'default'}"
               @click="selectedFont = 'default'; handleFontChange()"
@@ -69,8 +74,8 @@
             </div>
 
             <!-- 系统字体列表 -->
-            <div v-for="font in filteredFonts" 
-              :key="font.name" 
+            <div v-for="font in filteredFonts"
+              :key="font.name"
               class="p-3 cursor-pointer hover:bg-gray-800 transition-colors border-b border-gray-700 last:border-b-0"
               :class="{'bg-blue-600 hover:bg-blue-700': selectedFont === font.name}"
               @click="selectedFont = font.name; handleFontChange()"
@@ -116,6 +121,21 @@ import { invoke } from "@tauri-apps/api/core";
 import { enable, isEnabled, disable } from '@tauri-apps/plugin-autostart';
 import { getVersion } from '@tauri-apps/api/app';
 import { confirm } from '@tauri-apps/plugin-dialog';
+// import {Windows,} from '@/windows/create'
+const openHtmlFile = async () => {
+  try {
+    // 直接调用 Rust 函数打开文件
+    await invoke('open_file_with_browser', {
+      filePath: 'words/main.html'
+    });
+
+    console.log('已调用系统程序打开文件');
+  } catch (error) {
+    console.error('打开失败:', error);
+    alert(`无法打开文件: ${error}`);
+  }
+};
+
 
 interface FontInfo {
   name: string;

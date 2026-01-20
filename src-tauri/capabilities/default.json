@@ -11,7 +11,8 @@
     "contextmenu",
     "notification",
     "translate_settings",
-    "translate_window"
+    "translate_window",
+    "word"
   ],
   "permissions": [
     "core:default",

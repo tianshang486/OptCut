@@ -237,8 +237,9 @@ onMounted(async () => {
 
   // 处理 fixed_copy 和 fixed_ocr
   if (operationalID === 'fixed_copy') {
-    await emit('copy_image', { path: image_path.value });
-    await emit('close_fixed', { label: label });
+    // alert('执行复制图片'+ image_path.value)
+    // 延迟执行防止图片没有生成
+    await copyImage(image_path.value,true)
   }
 
   if (operationalID === 'fixed_ocr') {
@@ -342,7 +343,7 @@ onMounted(async () => {
           toolbarWin = await NewWindows.createWin({
             label: 'Toolbar',
             url: `/#/painting-toolbar?sourceLabel=${label}`,
-            width: 450,
+            width: 500,
             height: 40,
             x: x,
             y: y,

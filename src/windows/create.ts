@@ -48,6 +48,7 @@ export class Windows {
         const win = new WebviewWindow(args.label, args)
 
         await win.once('tauri://created', async () => {
+            console.log('打开信息',args)
             console.log('tauri://created', url_parameters)
             // this.sendMsgToWin(args.label, url_parameters)
 
