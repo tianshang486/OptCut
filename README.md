@@ -22,7 +22,7 @@
 # 演示
 
 <div align="center">
-    <img src="src-tauri/icons/a.gif" alt="32x32" />
+    <img src="src-tauri/assets/a.gif" alt="32x32" />
 </div>
 
 # 教程
