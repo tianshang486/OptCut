@@ -29,6 +29,8 @@
 
 ## ==[点击跳转](src-tauri/words/main.md)==
 
+## 下载软件,点击教程观看效果更佳
+
 # 使用的项目
 
 - [tauri-apps/tauri: Build smaller, faster, and more secure desktop and mobile applications with a web frontend.](https://github.com/tauri-apps/tauri)
