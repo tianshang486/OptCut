@@ -26,3 +26,4 @@ dist-ssr
 target
 /fonts/
 /setup
+/src-tauri/words/main.html
