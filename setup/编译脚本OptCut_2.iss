@@ -2,7 +2,7 @@
 ; 有关创建 Inno Setup 脚本文件的详细资料请查阅帮助文档！
 
 #define MyAppName "OptCut"
-#define MyAppVersion "1.0"
+#define MyAppVersion "V 0.1.0"
 #define MyAppPublisher "昼夜"
 #define MyAppURL "https://www.OptCut.com/"
 #define MyAppExeName "OptCut.exe"
